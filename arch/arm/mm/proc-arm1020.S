@@ -377,6 +377,12 @@ ENTRY(arm1020_cache_fns)
 	.long	arm1020_dma_unmap_area
 	.long	arm1020_dma_flush_range
 
+	.globl	arm1020_flush_kern_cache_louis
+	.equ	arm1020_flush_kern_cache_louis, arm1020_flush_kern_cache_all
+
+	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
+	define_cache_functions arm1020
+
 	.align	5
 ENTRY(cpu_arm1020_dcache_clean_area)
 #ifndef CONFIG_CPU_DCACHE_DISABLE

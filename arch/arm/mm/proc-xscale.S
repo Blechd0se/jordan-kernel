@@ -419,6 +419,12 @@ ENTRY(xscale_cache_fns)
 	.long	xscale_dma_unmap_area
 	.long	xscale_dma_flush_range
 
+	.globl	xscale_flush_kern_cache_louis
+	.equ	xscale_flush_kern_cache_louis, xscale_flush_kern_cache_all
+
+	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
+	define_cache_functions xscale
+
 /*
  * On stepping A0/A1 of the 80200, invalidating D-cache by line doesn't
  * clear the dirty bits, which means that if we invalidate a dirty line,

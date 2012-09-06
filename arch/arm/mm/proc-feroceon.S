@@ -435,6 +435,33 @@ ENTRY(feroceon_range_cache_fns)
 	.long	feroceon_range_dma_map_area
 	.long	feroceon_dma_unmap_area
 	.long	feroceon_range_dma_flush_range
+=======
+	.globl	feroceon_flush_kern_cache_louis
+	.equ	feroceon_flush_kern_cache_louis, feroceon_flush_kern_cache_all
+
+	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
+	define_cache_functions feroceon
+
+.macro range_alias basename
+	.globl feroceon_range_\basename
+	.type feroceon_range_\basename , %function
+	.equ feroceon_range_\basename , feroceon_\basename
+.endm
+
+/*
+ * Most of the cache functions are unchanged for this case.
+ * Export suitable alias symbols for the unchanged functions:
+ */
+	range_alias flush_icache_all
+	range_alias flush_user_cache_all
+	range_alias flush_kern_cache_all
+	range_alias flush_user_cache_range
+	range_alias coherent_kern_range
+	range_alias coherent_user_range
+	range_alias dma_unmap_area
+
+	define_cache_functions feroceon_range
+>>>>>>> 031bd87... ARM: mm: implement LoUIS API for cache maintenance ops
 
 	.align	5
 ENTRY(cpu_feroceon_dcache_clean_area)

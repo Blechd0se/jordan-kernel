@@ -319,6 +319,11 @@ ENTRY(arm946_cache_fns)
 	.long	arm946_dma_unmap_area
 	.long	arm946_dma_flush_range
 
+	.globl	arm946_flush_kern_cache_louis
+	.equ	arm946_flush_kern_cache_louis, arm946_flush_kern_cache_all
+
+	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
+	define_cache_functions arm946
 
 ENTRY(cpu_arm946_dcache_clean_area)
 #ifndef CONFIG_CPU_DCACHE_WRITETHROUGH

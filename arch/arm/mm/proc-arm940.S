@@ -276,6 +276,12 @@ ENTRY(arm940_cache_fns)
 	.long	arm940_dma_unmap_area
 	.long	arm940_dma_flush_range
 
+	.globl	arm940_flush_kern_cache_louis
+	.equ	arm940_flush_kern_cache_louis, arm940_flush_kern_cache_all
+
+	@ define struct cpu_cache_fns (see <asm/cacheflush.h> and proc-macros.S)
+	define_cache_functions arm940
+
 	__CPUINIT
 
 	.type	__arm940_setup, #function

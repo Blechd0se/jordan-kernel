@@ -343,6 +343,9 @@ ENTRY(v6_dma_unmap_area)
 	mov	pc, lr
 ENDPROC(v6_dma_unmap_area)
 
+	.globl	v6_flush_kern_cache_louis
+	.equ	v6_flush_kern_cache_louis, v6_flush_kern_cache_all
+
 	__INITDATA
 
 	.type	v6_cache_fns, #object
