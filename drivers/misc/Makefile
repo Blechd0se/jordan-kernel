@@ -64,3 +64,5 @@ obj-$(CONFIG_MACH_OMAP_MAPPHONE) += clk_32k_rw.o
 obj-$(CONFIG_NETMUX_DRIVER)     += netmux/
 obj-$(CONFIG_NETMUX_LINKDRIVER) += netmux_linkdriver/
 obj-$(CONFIG_MODEM_PM_DRIVER)   += modem_pm_driver/
+obj-$(CONFIG_FSYNC_CONTROL)	+= fsync_control.o
+
