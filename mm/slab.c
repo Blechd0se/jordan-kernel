@@ -490,7 +490,7 @@ static void **dbg_userword(struct kmem_cache *cachep, void *objp)
 
 #endif
 
-#ifdef CONFIG_TRACING_SUPPORT
+#ifdef CONFIG_KMEMTRACE
 size_t slab_buffer_size(struct kmem_cache *cachep)
 {
 	return cachep->buffer_size;
@@ -3128,19 +3128,13 @@ static inline void *____cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 	} else {
 		STATS_INC_ALLOCMISS(cachep);
 		objp = cache_alloc_refill(cachep, flags);
-		/*
-		 * the 'ac' may be updated by cache_alloc_refill(),
-		 * and kmemleak_erase() requires its correct value.
-		 */
-		ac = cpu_cache_get(cachep);
 	}
 	/*
 	 * To avoid a false negative, if an object that is in one of the
 	 * per-CPU caches is leaked, we need to make sure kmemleak doesn't
 	 * treat the array pointers as a reference to the object.
 	 */
-	if (objp)
-		kmemleak_erase(&ac->entry[ac->avail]);
+	kmemleak_erase(&ac->entry[ac->avail]);
 	return objp;
 }
 
@@ -3337,7 +3331,7 @@ __cache_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid,
 	cache_alloc_debugcheck_before(cachep, flags);
 	local_irq_save(save_flags);
 
-	if (nodeid == -1)
+	if (unlikely(nodeid == -1))
 		nodeid = numa_node_id();
 
 	if (unlikely(!cachep->nodelists[nodeid])) {
@@ -3589,7 +3583,7 @@ void *kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)
 }
 EXPORT_SYMBOL(kmem_cache_alloc);
 
-#ifdef CONFIG_TRACING_SUPPORT
+#ifdef CONFIG_KMEMTRACE
 void *kmem_cache_alloc_notrace(struct kmem_cache *cachep, gfp_t flags)
 {
 	return __cache_alloc(cachep, flags, __builtin_return_address(0));
@@ -3652,7 +3646,7 @@ void *kmem_cache_alloc_node(struct kmem_cache *cachep, gfp_t flags, int nodeid)
 }
 EXPORT_SYMBOL(kmem_cache_alloc_node);
 
-#ifdef CONFIG_TRACING_SUPPORT
+#ifdef CONFIG_KMEMTRACE
 void *kmem_cache_alloc_node_notrace(struct kmem_cache *cachep,
 				    gfp_t flags,
 				    int nodeid)
