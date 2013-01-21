@@ -29,7 +29,7 @@
  */
 static DEFINE_MUTEX(fsync_mutex);
 
-bool early_suspend_active = false;
+bool early_suspend_active = true;
 #ifdef CONFIG_FSYNC_CONTROL
 extern bool fsynccontrol_fsync_enabled(void);
 #endif
