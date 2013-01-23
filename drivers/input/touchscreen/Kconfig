@@ -753,4 +753,9 @@ config TOUCHSCREEN_QUANTUM_OBP
 
 	  If unsure, say N.
 
+config TOUCHSCREEN_SWEEP2WAKE
+	tristate "Sweep2Wake for Quantum OBP based touchscreens"
+	depends on TOUCHSCREEN_QUANTUM_OBP
+	default n
+
 endif

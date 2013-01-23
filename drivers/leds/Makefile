@@ -44,6 +44,8 @@ obj-$(CONFIG_LEDS_NS2)			+= leds-ns2.o
 obj-$(CONFIG_LEDS_NETXBIG)		+= leds-netxbig.o
 obj-$(CONFIG_LEDS_OMAP4430_SDP_DISPLAY)	+= leds-omap4430sdp-display.o
 obj-$(CONFIG_LEDS_OMAP4430_SDP_KEYPAD)	+= leds-omap4430sdp-keypad.o
+obj-$(CONFIG_LEDS_BD7885)               += leds-bd7885.o # Not sure, if i got the right LED driver?
+obj-$(CONFIG_LEDS_BU9847)               += leds-bu9847.o
 
 # LED SPI Drivers
 obj-$(CONFIG_LEDS_DAC124S085)		+= leds-dac124s085.o
