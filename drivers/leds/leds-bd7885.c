@@ -42,6 +42,10 @@
 
 #include <linux/leds-bd7885.h>
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/qtouch_obp_ts.h>
+#endif
+
 #if defined(CONFIG_LEDS_BU9847)
 #include <linux/leds-bu9847.h>
 #endif
@@ -470,6 +474,13 @@ static int bd7885_probe(struct i2c_client *client,
 	printk(KERN_INFO "BD7885 chip probe is finished.\n");
 
 	return ret;
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	if (!strcmp(pdata->led_config[2].name, "button-backlight")) {
+		sweep2wake_setleddev(&ldata[2].ldev);
+		printk(KERN_INFO "[sweep2wake]: set led device %s, bank %d\n", pdata->led_config[2].name, ldata[2].bank);
+	}
+#endif
 
 exit_check_functionality_failed:
 	return ret;
