@@ -177,13 +177,8 @@ static void mapphone_wifi_init(void)
 
 	ret = gpio_request(MAPPHONE_WIFI_PMENA_GPIO, "wifi_pmena");
 	if (ret < 0) {
-<<<<<<< HEAD
-		printk(KERN_ERR "%s: can't reserve GPIO: %ld\n", __func__,
-			mapphone_wifi_irq_gpio);
-=======
 		printk(KERN_ERR "%s: can't reserve GPIO: %d\n", __func__,
 			MAPPHONE_WIFI_PMENA_GPIO);
->>>>>>> 844e39f046685135c7c121f04ef847aeb653436d
 		return;
 	}
 	gpio_direction_output(MAPPHONE_WIFI_PMENA_GPIO, 0);
