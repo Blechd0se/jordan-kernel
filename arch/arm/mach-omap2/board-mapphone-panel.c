@@ -161,23 +161,23 @@ static int mapphone_displ_lvds_wp_e = -1;
 static struct powerdomain *dss_pwrdm;
 
 static int  mapphone_feature_hdmi;
-static int  mapphone_hdmi_5v_enable;       /* 0 by default */
-static int  mapphone_hdmi_platform_hpd_en; /* 0 by default */
-static int  mapphone_hdmi_5v_force_off;    /* 0 by default */
+//static int  mapphone_hdmi_5v_enable;       /* 0 by default */
+//static int  mapphone_hdmi_platform_hpd_en; /* 0 by default */
+//static int  mapphone_hdmi_5v_force_off;    /* 0 by default */
 #define HDMI_DAC_REGULATOR_NAME_SIZE  (32)
-static char mapphone_hdmi_dac_reg_name[HDMI_DAC_REGULATOR_NAME_SIZE + 1];
+//static char mapphone_hdmi_dac_reg_name[HDMI_DAC_REGULATOR_NAME_SIZE + 1];
 struct regulator *mapphone_hdmi_dac_reg;
 struct regulator *mapphone_hdmi_5v_reg;
 
-static int  mapphone_panel_hdmi_5v_enable(void);
-static int  mapphone_panel_hdmi_5v_disable(void);
-static int  mapphone_panel_enable_hdtv(struct omap_dss_device *dssdev);
-static void mapphone_panel_disable_hdtv(struct omap_dss_device *dssdev);
-static int  mapphone_panel_enable_hpd_hdtv(struct omap_dss_device *dssdev);
-static void mapphone_panel_disable_hpd_hdtv(struct omap_dss_device *dssdev);
-static int  mapphone_panel_hdtv_test(struct omap_dss_device *dssdev, int level);
+//static int  mapphone_panel_hdmi_5v_enable(void);
+//static int  mapphone_panel_hdmi_5v_disable(void);
+//static int  mapphone_panel_enable_hdtv(struct omap_dss_device *dssdev);
+//static void mapphone_panel_disable_hdtv(struct omap_dss_device *dssdev);
+//static int  mapphone_panel_enable_hpd_hdtv(struct omap_dss_device *dssdev);
+//static void mapphone_panel_disable_hpd_hdtv(struct omap_dss_device *dssdev);
+//static int  mapphone_panel_hdtv_test(struct omap_dss_device *dssdev, int level);
 
-static struct omap_dss_device mapphone_hdtv_device = {
+/* static struct omap_dss_device mapphone_hdtv_device = {
 	.name                  = "hdmi",
 	.driver_name           = "hdmi_panel",
 	.type                  = OMAP_DISPLAY_TYPE_HDMI,
@@ -195,11 +195,11 @@ static struct omap_dss_device mapphone_hdtv_device = {
 	.platform_enable       = mapphone_panel_enable_hdtv,
 	.platform_disable      = mapphone_panel_disable_hdtv,
 
-#ifdef CONFIG_DEBUG_FS
+#ifdef CONFIG_DEBUG_FS */
 	/* Used as a simple engineering test interface */
-	.set_backlight         = mapphone_panel_hdtv_test,
+	/*.set_backlight         = mapphone_panel_hdtv_test,
 #endif
-};
+};*/
 
 struct regulator_consumer_supply hdmi_hpd_consumers =
 	REGULATOR_SUPPLY("hdmi_5V_en", NULL);
@@ -212,7 +212,7 @@ struct regulator_init_data hpd_en_initdata = {
 	},
 };
 
-static struct fixed_voltage_config hpd_en_config = {
+/*static struct fixed_voltage_config hpd_en_config = {
 	.supply_name		= "hdmi_5v_en",
 	.microvolts		= 5000000,
 	.gpio			= 59,
@@ -220,21 +220,21 @@ static struct fixed_voltage_config hpd_en_config = {
 	.enable_high		= 1,
 	.enabled_at_boot	= 0,
 	.init_data		= &hpd_en_initdata,
-};
+};*/
 
-static struct platform_device hpd_en_device = {
+/*static struct platform_device hpd_en_device = {
 	.name	= "reg-fixed-voltage",
 	.id	= 0,
 	.dev	= {
 		.platform_data = &hpd_en_config,
 	},
-};
+}; */
 
-static struct platform_device *hdmi_regulator_devices[] = {
+/* static struct platform_device *hdmi_regulator_devices[] = {
 	&hpd_en_device,
-};
+}; */
 
-static int  mapphone_panel_hdmi_5v_enable(void)
+/*static int  mapphone_panel_hdmi_5v_enable(void)
 {
 	int rc = -1;
 
@@ -257,9 +257,9 @@ static int  mapphone_panel_hdmi_5v_enable(void)
 	}
 
 	return rc;
-}
+}*/
 
-static int mapphone_panel_hdmi_5v_disable(void)
+/*static int mapphone_panel_hdmi_5v_disable(void)
 {
 	int rc = 0;
 
@@ -273,7 +273,7 @@ static int mapphone_panel_hdmi_5v_disable(void)
 		}
 	}
 	return rc;
-}
+}*/
 
 static void mapphone_panel_reset(bool enable)
 {
@@ -901,8 +901,8 @@ static int mapphone_dt_get_panel_feature(void)
 	if (panel_prop != NULL)
 		panel_data->ftr_support.som = *(bool *)panel_prop;
 
-end:
-	of_node_put(panel_node);
+//end:
+//	of_node_put(panel_node);
 err:
 	return r;
 
@@ -1017,17 +1017,17 @@ static int mapphone_dt_get_lvds_panel_info(void)
 	return 0;
 }
 
-static int mapphone_dt_get_hdtv_info(void)
+/*static int mapphone_dt_get_hdtv_info(void)
 {
 	struct device_node *panel_node;
 	const void *panel_prop;
-	struct omap_ovl2mgr_mapping *read_ovl2mgr_mapping = NULL;
-	int len = 0, i = 0;
+	//struct omap_ovl2mgr_mapping *read_ovl2mgr_mapping = NULL;
+	//int len = 0, i = 0;
 
-	PANELDBG("dt_get_hdtv_info()\n");
+	PANELDBG("dt_get_hdtv_info()\n"); */
 
 	/* return err if fail to open DT */
-	panel_node = of_find_node_by_path(DT_PATH_DISPLAY2);
+	/*panel_node = of_find_node_by_path(DT_PATH_DISPLAY2);
 	if (panel_node == NULL)
 		return -ENODEV;
 
@@ -1070,7 +1070,7 @@ static int mapphone_dt_get_hdtv_info(void)
 
 	of_node_put(panel_node);
 	return 0;
-}
+} */
 
 static int mapphone_dt_get_feature_info(void)
 {
@@ -1189,7 +1189,7 @@ static int __init mapphone_dt_panel_init(void)
 }
 
 
-static int mapphone_panel_enable_hdtv(struct omap_dss_device *dssdev)
+/*static int mapphone_panel_enable_hdtv(struct omap_dss_device *dssdev)
 {
 	int rc = 0;
 
@@ -1214,47 +1214,47 @@ static int mapphone_panel_enable_hdtv(struct omap_dss_device *dssdev)
 	if (rc != 0) {
 		PANELERR("Failed HDMI regulator_enable (%d)\n", rc);
 	} else {
-		PANELDBG("Enabled HDMI DAC regulator\n");
+		PANELDBG("Enabled HDMI DAC regulator\n"); */
 		/* Settling time */
-		msleep(2);
+		/*msleep(2);
 	}
 
 exit:
 	return rc;
-}
+}*/
 
-static void mapphone_panel_disable_hdtv(struct omap_dss_device *dssdev)
+/*static void mapphone_panel_disable_hdtv(struct omap_dss_device *dssdev)
 {
 	PANELDBG("mapphone_panel_disable_hdtv\n");
 
 	if (mapphone_hdmi_dac_reg)
 		regulator_disable(mapphone_hdmi_dac_reg);
-}
+}*/
 
-static int  mapphone_panel_enable_hpd_hdtv(struct omap_dss_device *dssdev)
+/*static int  mapphone_panel_enable_hpd_hdtv(struct omap_dss_device *dssdev)
 {
 	int rc = 0;
 
-	PANELDBG("mapphone_panel_enable_hpd_hdtv\n");
+	PANELDBG("mapphone_panel_enable_hpd_hdtv\n"); */
 
 	/* Only enable if not currently enabled */
-	if (mapphone_hdmi_platform_hpd_en == 0) {
+	/*if (mapphone_hdmi_platform_hpd_en == 0) {
 		mapphone_hdmi_platform_hpd_en = 1;
 		rc = mapphone_panel_hdmi_5v_enable();
 	}
 
 	return rc;
-}
+}*/
 
-static void mapphone_panel_disable_hpd_hdtv(struct omap_dss_device *dssdev)
+/*static void mapphone_panel_disable_hpd_hdtv(struct omap_dss_device *dssdev)
 {
 	PANELDBG("mapphone_panel_disable_hpd_hdtv\n");
 
 	mapphone_hdmi_platform_hpd_en = 0;
 	mapphone_panel_hdmi_5v_disable();
-}
+}*/
 
-static int mapphone_panel_hdtv_test(struct omap_dss_device *not_used, int tst)
+/*static int mapphone_panel_hdtv_test(struct omap_dss_device *not_used, int tst)
 {
 	if (tst == 0) {
 		mapphone_hdmi_5v_force_off = 0;
@@ -1266,17 +1266,17 @@ static int mapphone_panel_hdtv_test(struct omap_dss_device *not_used, int tst)
 			mapphone_panel_hdmi_5v_disable();
 	}
 	return 0;
-}
+}*/
 
 static struct platform_device omap_panel_device = {
 	.name = "omap-panel",
 	.id = -1,
 };
 
-static struct platform_device omap_dssmgr_device = {
+/*static struct platform_device omap_dssmgr_device = {
 	.name = "omap-dssmgr",
 	.id = -1,
-};
+}; */
 
 static void mapphone_panel_get_fb_info(void)
 {
@@ -1428,8 +1428,8 @@ void __init mapphone_panel_init(void)
 
 	return;
 
-failed_hdmi_5v:
-	gpio_free(mapphone_displ_lvds_wp_e);
+//failed_hdmi_5v:
+//	gpio_free(mapphone_displ_lvds_wp_e);
 failed_req_lvds_wp_e:
 	gpio_free(mapphone_displ_lvds_wp_g);
 failed_req_lvds_wp_g:

@@ -79,7 +79,6 @@ static unsigned int omap_getspeed(unsigned int cpu)
 
 static int omap_cpufreq_scale(unsigned int target_freq, unsigned int cur_freq)
 {
-	unsigned int i;
 	int ret;
 	struct cpufreq_freqs freqs;
 
@@ -111,6 +110,7 @@ static int omap_cpufreq_scale(unsigned int target_freq, unsigned int cur_freq)
 	freqs.new = omap_getspeed(0);
 
 #ifdef CONFIG_SMP
+	unsigned int i;
 	/*
 	 * Note that loops_per_jiffy is not updated on SMP systems in
 	 * cpufreq driver. So, update the per-CPU loops_per_jiffy value

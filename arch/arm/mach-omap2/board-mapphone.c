@@ -219,7 +219,7 @@ static void mapphone_wifi_init(void)
 
 	ret = gpio_request(mapphone_wifi_irq_gpio, "wifi_irq");
 	if (ret < 0) {
-		printk(KERN_ERR "%s: can't reserve GPIO: %d\n", __func__,
+		printk(KERN_ERR "%s: can't reserve GPIO: %ld\n", __func__,
 			mapphone_wifi_irq_gpio);
 		return;
 	}
