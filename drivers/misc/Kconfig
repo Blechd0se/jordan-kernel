@@ -433,4 +433,10 @@ config SMOOTHUI
 	help
 	  Say Y here to enable Smooth UI
 
+config SWEEP2WAKE
+	bool "Support for sweep2wake"
+	default n
+	help
+	  Say Y here to enable sweep2wake
+
 endif # MISC_DEVICES
