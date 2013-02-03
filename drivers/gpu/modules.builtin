@@ -1,8 +1,0 @@
-kernel/drivers/gpu/ion/ion.ko
-kernel/drivers/gpu/ion/ion_heap.ko
-kernel/drivers/gpu/ion/ion_system_heap.ko
-kernel/drivers/gpu/ion/ion_carveout_heap.ko
-kernel/drivers/gpu/pvr/pvr_common.ko
-kernel/drivers/gpu/pvr/sgx.ko
-kernel/drivers/gpu/pvr/omaplfb.ko
-kernel/drivers/gpu/pvr/pvr530.ko

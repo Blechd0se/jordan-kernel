@@ -1,5 +1,0 @@
-kernel/drivers/power/power_supply.ko
-kernel/drivers/power/cpcap-charger.ko
-kernel/drivers/power/cpcap-usb-charger.ko
-kernel/drivers/power/cpcap-factory.ko
-kernel/drivers/power/cpcap-battery.ko

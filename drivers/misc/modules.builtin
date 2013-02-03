@@ -1,6 +1,0 @@
-kernel/drivers/misc/isl29030.ko
-kernel/drivers/misc/akm8973_akmd.ko
-kernel/drivers/misc/kxtf9.ko
-kernel/drivers/misc/bu52014hfv.ko
-kernel/drivers/misc/ti-st/st_drv.ko
-kernel/drivers/misc/ti-st/tty_hci.ko

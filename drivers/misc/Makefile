@@ -54,5 +54,4 @@ obj-$(CONFIG_OMAP_DEV_TYPE_DRV) += omap_dev_type.o
 obj-$(CONFIG_CAMERA_MISC)	+= camera_misc/
 obj-$(CONFIG_FSYNC_CONTROL)	+= fsync_control.o
 obj-$(CONFIG_SMOOTHUI)		+= smooth_ui.o
-obj-$(CONFIG_SWEEP2WAKE)	+= sweep2wake.o
 
