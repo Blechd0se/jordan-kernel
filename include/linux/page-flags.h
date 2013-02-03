@@ -230,6 +230,10 @@ PAGEFLAG(WasActive, was_active)
 __PAGEFLAG(SlubFrozen, slub_frozen)
 __PAGEFLAG(SlubDebug, slub_debug)
 
+#ifdef CONFIG_CLEANCACHE
+PAGEFLAG(WasActive, was_active)
+#endif
+
 /*
  * Private page markings that may be used by the filesystem that owns the page
  * for its own purposes.
