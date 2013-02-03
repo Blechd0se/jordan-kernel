@@ -32,10 +32,18 @@
 #include <linux/proc_fs.h>
 #include <asm/uaccess.h>
 
+#ifdef CONFIG_SWEEP2WAKE
+#include <linux/sweep2wake.h>
+#endif
+
 #define DEBUG 0
 #define MULTITOUCH_TAG "multitouch"
 #define IGNORE_CHECKSUM_MISMATCH
 #define ABS_MT_PRESSURE         0x3a
+
+#ifdef CONFIG_SWEEP2WAKE
+bool suspended_sweep = false;
+#endif
 
 struct qtm_object {
 	struct qtm_obj_entry		entry;
@@ -883,6 +891,7 @@ static int do_cmd_proc_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 			}
 		}
 	}
+
 	return ret;
 }
 #define QTM_TOUCH_MULTI_STATUS_SUPPRESS         (1 << 1)
@@ -1027,6 +1036,17 @@ static int do_touch_keyarray_msg(struct qtouch_ts_data *ts,
 	if (qtouch_tsdebug & 2)
 		pr_info("%s: key state changed 0x%08x -> 0x%08x\n", __func__,
 			ts->last_keystate, msg->keystate);
+	
+#ifdef CONFIG_SWEEP2WAKE
+		if(suspended_sweep == false){
+			sw_lock(msg->keystate);			
+			//so340010_report_event(state);
+		}else{
+			sw_unlock(msg->keystate);
+		}
+#else
+		//so340010_report_event(state);
+#endif
 
 	/* update our internal state */
 	ts->last_keystate = msg->keystate;
@@ -1988,7 +2008,14 @@ static void qtouch_ts_early_suspend(struct early_suspend *handler)
 	struct qtouch_ts_data *ts;
 
 	ts = container_of(handler, struct qtouch_ts_data, early_suspend);
+	
+#ifdef CONFIG_SWEEP2WAKE
+	suspended_sweep = true;
+#else
+
 	qtouch_ts_suspend(ts->client, PMSG_SUSPEND);
+
+#endif
 }
 
 static void qtouch_ts_late_resume(struct early_suspend *handler)
@@ -1996,7 +2023,14 @@ static void qtouch_ts_late_resume(struct early_suspend *handler)
 	struct qtouch_ts_data *ts;
 
 	ts = container_of(handler, struct qtouch_ts_data, early_suspend);
+
+#ifdef CONFIG_SWEEP2WAKE
+	suspended_sweep = true;
+#else
+
 	qtouch_ts_resume(ts->client);
+
+#endif
 }
 #endif
 
