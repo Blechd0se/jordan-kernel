@@ -476,10 +476,7 @@ static int bd7885_probe(struct i2c_client *client,
 	return ret;
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	if (!strcmp(pdata->led_config[2].name, "button-backlight")) {
-		sweep2wake_setleddev(&ldata[2].ldev);
-		printk(KERN_INFO "[sweep2wake]: set led device %s, bank %d\n", pdata->led_config[2].name, ldata[2].bank);
-	}
+	printk(KERN_INFO "[sweep2wake]: set led device, bank \n");
 #endif
 
 exit_check_functionality_failed:

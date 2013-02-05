@@ -37,6 +37,10 @@
 #include <linux/time.h>
 #endif
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+#include <linux/leds-bd7885.h>
+#endif
+
 struct qtm_object {
 	struct qtm_obj_entry		entry;
 	uint8_t				report_id_min;
@@ -134,6 +138,67 @@ module_param_named(disable_touch,qtouch_disable_touch,uint,0664);
 
 static uint8_t qtouch_calibrate_chip(struct qtouch_ts_data *ts);
 static uint8_t qtouch_check_chip_calibration(struct qtouch_ts_data *ts);
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+bool s2w_switch = true, scr_suspended = false, exec_count = true;
+bool scr_on_touch = false, led_exec_count = false, barrier[2] = {false, false};
+static struct input_dev * sweep2wake_pwrdev;
+static struct led_classdev * sweep2wake_leddev;
+static DEFINE_MUTEX(pwrlock);
+
+#ifdef CONFIG_CMDLINE_OPTIONS
+static int __init qtouch_read_s2w_cmdline(char *s2w)
+{
+	if (strcmp(s2w, "1") == 0) {
+		printk(KERN_INFO "[cmdline_s2w]: Sweep2Wake enabled. | s2w='%s'", s2w);
+		s2w_switch = true;
+	} else if (strcmp(s2w, "0") == 0) {
+		printk(KERN_INFO "[cmdline_s2w]: Sweep2Wake disabled. | s2w='%s'", s2w);
+		s2w_switch = false;
+		printk(KERN_INFO "Sweep2wake enabled anyway...!");
+		s2w_switch = true;
+	} else {
+		printk(KERN_INFO "[cmdline_s2w]: No valid input found. Sweep2Wake disabled. | s2w='%s'", s2w);
+		s2w_switch = false;
+		printk(KERN_INFO "Sweep2wake enabled anyway...");
+		s2w_switch = true;    // enable it 
+	}
+	return 1;
+}
+__setup("s2w=", qtouch_read_s2w_cmdline);
+#endif
+
+extern void sweep2wake_setdev(struct input_dev * input_device) {
+	sweep2wake_pwrdev = input_device;
+	return;
+}
+EXPORT_SYMBOL(sweep2wake_setdev);
+
+extern void sweep2wake_setleddev(struct led_classdev * led_dev) {
+	sweep2wake_leddev = led_dev;
+	return;
+}
+EXPORT_SYMBOL(sweep2wake_setleddev);
+
+static void sweep2wake_presspwr(struct work_struct * sweep2wake_presspwr_work) {
+	input_event(sweep2wake_pwrdev, EV_KEY, KEY_POWER, 1);
+	input_event(sweep2wake_pwrdev, EV_SYN, 0, 0);
+	msleep(100);
+	input_event(sweep2wake_pwrdev, EV_KEY, KEY_POWER, 0);
+	input_event(sweep2wake_pwrdev, EV_SYN, 0, 0);
+	msleep(100);
+	mutex_unlock(&pwrlock);
+	return;
+}
+static DECLARE_WORK(sweep2wake_presspwr_work, sweep2wake_presspwr);
+
+void sweep2wake_pwrtrigger(void) {
+	if (mutex_trylock(&pwrlock)) {
+		schedule_work(&sweep2wake_presspwr_work);
+	}
+	return;
+}
+#endif
 
 static irqreturn_t qtouch_ts_irq_handler(int irq, void *dev_id)
 {
@@ -973,6 +1038,11 @@ static int qtouch_do_touch_multi_msg_filter(struct qtouch_ts_data *ts,
 	int diff_position_y;
 	int report = 1;
 	bool active_touch = false;
+	int num_fingers_down;
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	int prevx = 0, nextx = 0;
+#endif
 
 	finger = msg->report_id - obj->report_id_min;
 	if (finger >= ts->pdata->multi_touch_cfg.num_touch)
@@ -1395,10 +1465,83 @@ static int qtouch_do_touch_multi_msg(struct qtouch_ts_data *ts,
 		input_report_abs(ts->input_dev, ABS_MT_TRACKING_ID,
 				 i);
 		input_mt_sync(ts->input_dev);
+
 		active_touch = true;
 	}
 	/* If no touches are still active,need an empty input_mt_sync()
 	   to release any previous touches. */
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+			//TODO: Fix this!
+			// Right finger_event? Right x-values? Optional: search for right led-backlights
+			//left->right
+			if ((ts->finger_data[i].down == 1) && (scr_suspended == true) && (s2w_switch == true)) {
+				prevx = 50;
+				nextx = 150;
+				if ((barrier[0] == true) ||
+				   ((ts->finger_data[i].x_data > prevx) &&
+				    (ts->finger_data[i].x_data < nextx) &&
+				    (ts->finger_data[i].y_data > 480))) {
+					if ((led_exec_count == true) && (scr_on_touch == false)) {
+						//leds-bd7885_drvx_led_brightness_set(sweep2wake_leddev, 255);
+						printk(KERN_INFO "[sweep2wake]: activated button_backlight");
+						led_exec_count = false;
+					}
+					prevx = 150;
+					nextx = 300;
+					barrier[0] = true;
+					if ((barrier[1] == true) ||
+					   ((ts->finger_data[i].x_data > prevx) &&
+					    (ts->finger_data[i].x_data < nextx) &&
+					    (ts->finger_data[i].y_data > 480))) {
+						prevx = 300;
+						barrier[1] = true;
+						if ((ts->finger_data[i].x_data > prevx) &&
+						    (ts->finger_data[i].y_data > 480)) {
+							if (ts->finger_data[i].x_data > 400) {
+								if (exec_count) {
+									printk(KERN_INFO "[sweep2wake]: ON");
+									sweep2wake_pwrtrigger();
+									exec_count = false;
+									break;
+								}
+							}
+						}
+					}
+				}
+			//right->left
+			} else if ((ts->finger_data[i].down == 1) && (scr_suspended == false) && (s2w_switch == true)) {
+				scr_on_touch=true;
+				prevx = 1050;
+				nextx = 680;
+				if ((barrier[0] == true) ||
+				   ((ts->finger_data[i].x_data < prevx) &&
+				    (ts->finger_data[i].x_data > nextx) &&
+				    ( ts->finger_data[i].y_data > 950))) {
+					prevx = 680;
+					nextx = 340;
+					barrier[0] = true;
+					if ((barrier[1] == true) ||
+					   ((ts->finger_data[i].x_data < prevx) &&
+					    (ts->finger_data[i].x_data > nextx) &&
+					    (ts->finger_data[i].y_data > 950))) {
+						prevx = 340;
+						barrier[1] = true;
+						if ((ts->finger_data[i].x_data < prevx) &&
+						    (ts->finger_data[i].y_data > 950)) {
+							if (ts->finger_data[i].x_data < 250) {
+								if (exec_count) {
+									printk(KERN_INFO "[sweep2wake]: OFF");
+									sweep2wake_pwrtrigger();
+									exec_count = false;
+									break;
+								}
+							}
+						}
+					}
+				}
+			}
+#endif
+
 	if (!active_touch)
 		input_mt_sync(ts->input_dev);
 	input_sync(ts->input_dev);
@@ -1961,6 +2104,24 @@ static void qtouch_ts_work_func(struct work_struct *work)
 		goto done;
 	}
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+			 /* if finger released, reset count & barriers */
+			if ((s2w_switch == true)) {
+				if ((scr_suspended == true) &&
+				    (led_exec_count == false) &&
+				    (scr_on_touch == false) &&
+				    (exec_count == true)) {
+					//pm8058_drvx_led_brightness_set(sweep2wake_leddev, 0);
+					printk(KERN_INFO "[sweep2wake]: deactivated button_backlight");
+				}
+				exec_count = true;
+				led_exec_count = true;
+				barrier[0] = false;
+				barrier[1] = false;
+				scr_on_touch = false;
+			}
+#endif
+
 done:
     if(qtouch_disable_touch)
 	{
@@ -2436,16 +2597,38 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 	if (ts->mode == 1)
 		return -EBUSY;
 
-	disable_irq(ts->client->irq);
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	if (s2w_switch == true) {
+		//screen off, enable_irq_wake
+		scr_suspended = true;
+		enable_irq_wake(ts->client->irq);
+		//ensure backlight is turned off
+		//pm8058_drvx_led_brightness_set(sweep2wake_leddev, 0);
+		printk(KERN_INFO "[sweep2wake]: deactivated button_backlight | suspend");
+	}
+#endif
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	if (s2w_switch == false) {
+#endif
+		disable_irq(ts->client->irq);
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	}
+#endif
 	ret = cancel_work_sync(&ts->work);
 	if (ret) { /* if work was pending disable-count is now 2 */
 		pr_info("%s: Pending work item\n", __func__);
 		enable_irq(ts->client->irq);
 	}
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	if (s2w_switch == false) {
+#endif
 	ret = qtouch_power_config(ts, 0);
 	if (ret < 0)
 		pr_err("%s: Cannot write power config\n", __func__);
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	}
+#endif
 
 	return 0;
 }
@@ -2454,6 +2637,14 @@ static int qtouch_ts_resume(struct i2c_client *client)
 {
 	struct qtouch_ts_data *ts = i2c_get_clientdata(client);
 	int i;
+
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	if (s2w_switch == true) {
+		//screen on, disable_irq_wake
+		scr_suspended = false;
+		disable_irq_wake(ts->client->irq);
+	}
+#endif
 
 	if (qtouch_tsdebug & 4)
 		pr_info("%s: Resuming\n", __func__);
@@ -2483,7 +2674,13 @@ static int qtouch_ts_resume(struct i2c_client *client)
 	   instead, which makes sure everything gets re-intialized. */
 	qtouch_force_reset(ts, 0);
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	if (s2w_switch == false) {	
+#endif
 	enable_irq(ts->client->irq);
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	}
+#endif
 	return 0;
 }
 
