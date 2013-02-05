@@ -170,7 +170,7 @@ static int __init gpio_event_probe(struct platform_device *pdev)
 		ip->input_devs->dev[i] = input_dev;
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 		if (!strcmp(input_dev->name, "jordan-keypad")) {
-			sweep2wake_setdev(input_dev);
+			//sweep2wake_setdev(input_dev);
 			printk(KERN_INFO "[sweep2wake]: set device %s\n", input_dev->name);
 		}
 #endif
