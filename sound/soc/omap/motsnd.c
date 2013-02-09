@@ -64,7 +64,6 @@
 #define MOTSND_DEBUG_LOG(args...)
 #endif
 
-static unsigned long dpll_abe_rate;
 
 #define DPLL_ABE_RATE_SPDIF	90315789
 
@@ -76,8 +75,6 @@ static int motsnd_hw_params(struct snd_pcm_substream *substream,
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
 	int ret;
-	unsigned long rate;
-	struct clk *dpll_abe_ck;
 
 	MOTSND_DEBUG_LOG("%s: entered\n", __func__);
 

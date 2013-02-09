@@ -301,11 +301,11 @@ int set_dss_ovl_info(struct dss2_ovl_info *oi)
 				(crop.y >> 1) * cfg->stride;
 
 #ifdef CONFIG_OMAP2_VRFB
-		if (cpu_is_omap3630() &&
+		if ((cpu_is_omap3630() &&
 			(info.paddr >= 0x70000000 &&
-						info.paddr <= 0x7FFFFFFF) ||
-			(info.paddr >= 0xE0000000 &&
-						info.paddr <= 0xFBFFFFFF)) {
+						info.paddr <= 0x7FFFFFFF)) ||
+			((info.paddr >= 0xE0000000 &&
+						info.paddr <= 0xFBFFFFFF))) {
 			info.rotation_type = OMAP_DSS_ROT_VRFB;
 		} else {
 #endif

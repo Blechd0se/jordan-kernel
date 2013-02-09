@@ -367,7 +367,6 @@ static UINT8 last_byte_checked = 0;
 static UINT16 null_byte_counter = 0;
 static UINT8 ack_counter = 0;
 
-static struct timer_cascade_root * sim_timer = NULL;
 
 /******************************************************************************
 * Local Functions

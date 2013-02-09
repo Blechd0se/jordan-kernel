@@ -2243,13 +2243,13 @@ int dispc_setup_plane(enum omap_plane plane,
 	u16 frame_height = height;
 	unsigned int field_offset = 0;
 	int pixpg;
+	unsigned long tiler_width, tiler_height;
+	u32 fifo_high, fifo_low;
+
 	if (cpu_is_omap44xx()) {
 		pixpg = (color_mode &
 			(OMAP_DSS_COLOR_YUV2 | OMAP_DSS_COLOR_UYVY)) ? 2 : 1;
 	}
-
-	unsigned long tiler_width, tiler_height;
-	u32 fifo_high, fifo_low;
 
 	DSSDBG("dispc_setup_plane %d, pa %x, sw %d, %d,%d, %d/%dx%d/%d -> "
 	       "%dx%d, ilace %d, cmode %x, rot %d, mir %d chan %d %dtap\n",

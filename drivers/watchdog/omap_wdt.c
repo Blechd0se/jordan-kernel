@@ -218,7 +218,6 @@ static int omap_wdt_open(struct inode *inode, struct file *file)
 static int omap_wdt_release(struct inode *inode, struct file *file)
 {
 	struct omap_wdt_dev *wdev = file->private_data;
-	void __iomem *base = wdev->base;
 
 	/*
 	 *      Shut off the timer unless NOWAYOUT is defined.
