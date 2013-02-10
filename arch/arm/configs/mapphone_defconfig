@@ -2628,7 +2628,7 @@ CONFIG_CRYPTO_DES=y
 #
 CONFIG_CRYPTO_DEFLATE=y
 # CONFIG_CRYPTO_ZLIB is not set
-# CONFIG_CRYPTO_LZO is not set
+CONFIG_CRYPTO_LZO=y
 
 #
 # Random Number Generation
