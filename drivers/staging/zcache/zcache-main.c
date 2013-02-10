@@ -24,6 +24,7 @@
 #include <linux/cpu.h>
 #include <linux/highmem.h>
 #include <linux/list.h>
+#include <linux/lzo.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
