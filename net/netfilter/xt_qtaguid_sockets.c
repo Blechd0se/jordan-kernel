@@ -131,9 +131,7 @@ struct sock *qtaguid_find_sk(const struct sk_buff *skb, const struct xt_match_pa
 	struct sock *sk = NULL;
 
 	const struct iphdr *iph = NULL;
-	struct ipv6hdr *iph6 = NULL;
 	struct udphdr _hdr, *hp;
-	int tproto = 0, thoff;
 	unsigned int hook_type = (1 << par->hooknum);
 
 	MT_DEBUG(TAG": find_sk(skb=%p) hooknum=%d family=%d\n", skb,

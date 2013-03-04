@@ -698,7 +698,6 @@ static int bd7885_ioctl(struct inode *inode, struct file *file,
 
 static int cpcap_bd7885_probe(struct platform_device *pdev)
 {
-	int ret;
 	struct bd7885_cpcap_data *info;
 
 	pr_info("%s:CPCAP Probe enter\n", __func__);

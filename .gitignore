@@ -35,7 +35,6 @@
 arch/arm/boot/compressed/lib1funcs.S
 include/asm-arm/
 scripts/recordmcount
-
 #
 # Top-level generic files
 #
