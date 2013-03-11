@@ -101,6 +101,7 @@
 
 /* UHH Register Set */
 #define	OMAP_UHH_REVISION				(0x00)
+#define	OMAP_UHH_SYSCONFIG				(0x10)
 #define	OMAP_UHH_SYSCONFIG_MIDLEMODE			(1 << 12)
 #define	OMAP_UHH_SYSCONFIG_CACTIVITY			(1 << 8)
 #define	OMAP_UHH_SYSCONFIG_SIDLEMODE			(1 << 3)
@@ -108,6 +109,8 @@
 #define	OMAP_UHH_SYSCONFIG_SOFTRESET			(1 << 1)
 #define	OMAP_UHH_SYSCONFIG_AUTOIDLE			(1 << 0)
 
+#define	OMAP_UHH_SYSSTATUS				(0x14)
+#define	OMAP_UHH_HOSTCONFIG				(0x40)
 #define	OMAP_UHH_HOSTCONFIG_ULPI_BYPASS			(1 << 0)
 #define	OMAP_UHH_HOSTCONFIG_ULPI_P1_BYPASS		(1 << 0)
 #define	OMAP_UHH_HOSTCONFIG_ULPI_P2_BYPASS		(1 << 11)
@@ -404,9 +407,7 @@ static void omap_ehci_soft_phy_reset(struct ehci_hcd_omap *omap, u8 port)
  */
 static int omap_start_ehc(struct ehci_hcd_omap *omap, struct usb_hcd *hcd)
 {
-#ifndef CONFIG_MACH_OMAP_MAPPHONE_DEFY
 	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
-#endif
 	u8 tll_ch_mask = 0;
 	unsigned reg = 0;
 	int ret = 0;
@@ -785,6 +786,36 @@ static int omap_start_ehc(struct ehci_hcd_omap *omap, struct usb_hcd *hcd)
 
 	return 0;
 
+err_sys_status:
+
+	if (omap->usbtll_p2_fck != NULL) {
+		clk_disable(omap->usbtll_p2_fck);
+		clk_put(omap->usbtll_p2_fck);
+	}
+	if (omap->usbhost_p2_fck != NULL) {
+		clk_disable(omap->usbhost_p2_fck);
+		clk_put(omap->usbhost_p2_fck);
+	}
+	if (omap->usbtll_p1_fck != NULL) {
+		clk_disable(omap->usbtll_p1_fck);
+		clk_put(omap->usbtll_p1_fck);
+	}
+	if (omap->usbhost_p1_fck != NULL) {
+		clk_disable(omap->usbhost_p1_fck);
+		clk_put(omap->usbhost_p1_fck);
+	}
+
+	clk_disable(omap->utmi_p2_fck);
+	clk_put(omap->utmi_p2_fck);
+	clk_disable(omap->xclk60mhsp2_ck);
+	clk_put(omap->xclk60mhsp2_ck);
+	clk_disable(omap->utmi_p1_fck);
+	clk_put(omap->utmi_p1_fck);
+	clk_disable(omap->xclk60mhsp1_ck);
+	clk_put(omap->xclk60mhsp1_ck);
+	clk_disable(omap->usbtll_ick);
+	clk_put(omap->usbtll_ick);
+
 err_tll_ick:
 	clk_disable(omap->usbtll_fck);
 	clk_put(omap->usbtll_fck);
@@ -965,8 +996,6 @@ static const struct hc_driver ehci_omap_hc_driver;
  */
 static int ehci_hcd_omap_probe(struct platform_device *pdev)
 {
-	struct device				*dev = &pdev->dev;
-	//struct ehci_hcd_omap_platform_data	*pdata = dev->platform_data;
 	struct usbhs_omap_board_data *pdata = pdev->dev.platform_data;
 	struct ehci_hcd_omap *omap;
 	struct resource *res;
@@ -1095,7 +1124,6 @@ static int ehci_hcd_omap_probe(struct platform_device *pdev)
 		}
 	}
 
-	pm_runtime_get_sync(dev->parent);
 
 #ifndef CONFIG_MACH_OMAP_MAPPHONE_DEFY
 	/* Soft reset the PHY using PHY reset command over ULPI */
@@ -1132,7 +1160,6 @@ static int ehci_hcd_omap_probe(struct platform_device *pdev)
 	return 0;
 
 err_add_hcd:
-	pm_runtime_put_sync(dev->parent);
 	omap_stop_ehc(omap, hcd);
 
 err_start:
@@ -1171,13 +1198,11 @@ err_pdata:
  */
 static int ehci_hcd_omap_remove(struct platform_device *pdev)
 {
-	struct device *dev	= &pdev->dev;
 	struct ehci_hcd_omap *omap = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_to_hcd(omap->ehci);
 	int i;
 
 	usb_remove_hcd(hcd);
-	pm_runtime_put_sync(dev->parent);
 	omap_stop_ehc(omap, hcd);
 	iounmap(hcd->regs);
 	for (i = 0 ; i < OMAP3_HS_USB_PORTS ; i++) {
