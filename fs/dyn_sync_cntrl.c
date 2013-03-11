@@ -34,7 +34,7 @@ bool early_suspend_active = true;
 extern bool fsynccontrol_fsync_enabled(void);
 #endif
 // Enabled by default, because FSync is enabled by default
-static bool dyn_fsync_active = false;
+static bool dyn_fsync_active = true;
 
 
 static ssize_t dyn_fsync_active_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
@@ -47,13 +47,13 @@ static ssize_t dyn_fsync_active_store(struct kobject *kobj, struct kobj_attribut
 	unsigned int data;
 
 	if(sscanf(buf, "%u\n", &data) == 1) {
-		// Dynamic should only be enabled when Fsync is on
-		if (data == 1 && fsynccontrol_fsync_enabled()) {
+		// If the User enables it, it should be enabled anyway:
+		if (data == 1) {
 			printk(KERN_WARNING "%s: dynamic fsync enabled\n", __FUNCTION__);
 			dyn_fsync_active = true;
 		}
-		// Disable it, when Fsync is off in general
-		else if (data == 0 && !fsynccontrol_fsync_enabled()) {
+		// Disable it:
+		else if (data == 0) {
 			printk(KERN_WARNING  "%s: dyanamic fsync disabled\n", __FUNCTION__);
 			dyn_fsync_active = false;
 		}
