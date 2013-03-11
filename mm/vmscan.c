@@ -2289,7 +2289,7 @@ static int kswapd(void *p)
 			 */
 			order = new_order;
 		} else {
-			if (!freezing(current))
+			if (!freezing(current) && !kthread_should_stop())
 				schedule();
 
 			order = pgdat->kswapd_max_order;
