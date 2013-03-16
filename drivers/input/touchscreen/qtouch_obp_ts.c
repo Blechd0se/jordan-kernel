@@ -1485,11 +1485,13 @@ static int qtouch_do_touch_multi_msg(struct qtouch_ts_data *ts,
 						barrier[1] = true;
 						if ((ts->finger_data[i].x_data > prevx) &&
 						    (ts->finger_data[i].y_data > 840)) {
+							if (ts->finger_data[i].x_data > 400) {
 								if (exec_count) {
 									printk(KERN_INFO "[sweep2wake]: ON");
 									sweep2wake_pwrtrigger();
 									exec_count = false;
 									break;
+								}
 							}
 						}
 					}
@@ -1497,23 +1499,23 @@ static int qtouch_do_touch_multi_msg(struct qtouch_ts_data *ts,
 			//right->left
 			} else if ((ts->finger_data[i].down == 1) && (scr_suspended == false) && (s2w_switch == true)) {
 				scr_on_touch=true;
-				prevx = 1050;
-				nextx = 680;
+				prevx = 400;
+				nextx = 350;
 				if ((barrier[0] == true) ||
 				   ((ts->finger_data[i].x_data < prevx) &&
 				    (ts->finger_data[i].x_data > nextx) &&
-				    ( ts->finger_data[i].y_data > 950))) {
-					prevx = 680;
-					nextx = 340;
+				    ( ts->finger_data[i].y_data > 840))) {
+					prevx = 350;
+					nextx = 250;
 					barrier[0] = true;
 					if ((barrier[1] == true) ||
 					   ((ts->finger_data[i].x_data < prevx) &&
 					    (ts->finger_data[i].x_data > nextx) &&
-					    (ts->finger_data[i].y_data > 950))) {
-						prevx = 340;
+					    (ts->finger_data[i].y_data > 840))) {
+						prevx = 250;
 						barrier[1] = true;
 						if ((ts->finger_data[i].x_data < prevx) &&
-						    (ts->finger_data[i].y_data > 950)) {
+						    (ts->finger_data[i].y_data > 840)) {
 							if (ts->finger_data[i].x_data < 250) {
 								if (exec_count) {
 									printk(KERN_INFO "[sweep2wake]: OFF");
