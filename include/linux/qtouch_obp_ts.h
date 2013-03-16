@@ -22,7 +22,6 @@
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 #include <linux/input.h>
-#include <linux/leds-bd7885.h>
 #endif
 
 #define QTOUCH_TS_NAME "qtouch-obp-ts"
@@ -509,9 +508,7 @@ struct touch_fw_entry {
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 /* Sweep2Wake */
-// TODO: Fix this!!!
-//extern void sweep2wake_setdev(struct input_dev * input_device);
-//extern void sweep2wake_setleddev(struct led_classdev * led_dev);
+extern void sweep2wake_setdev(struct input_dev * input_device);
 #endif
 
 #endif /* _LINUX_QTOUCH_OBP_TS_H */

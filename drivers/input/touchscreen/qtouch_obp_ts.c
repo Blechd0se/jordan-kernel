@@ -32,10 +32,6 @@
 #include <linux/proc_fs.h>
 #include <asm/uaccess.h>
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-#include <linux/leds-bd7885.h>
-#endif
-
 #define DEBUG 0
 #define MULTITOUCH_TAG "multitouch"
 #define IGNORE_CHECKSUM_MISMATCH
@@ -150,7 +146,6 @@ static void qtouch_force_reset(struct qtouch_ts_data *ts, uint8_t sw_reset);
 bool s2w_switch = true, scr_suspended = false, exec_count = true;
 bool scr_on_touch = false, led_exec_count = false, barrier[2] = {false, false};
 static struct input_dev * sweep2wake_pwrdev;
-static struct led_classdev * sweep2wake_leddev;
 static DEFINE_MUTEX(pwrlock);
 
 #ifdef CONFIG_CMDLINE_OPTIONS
@@ -181,17 +176,12 @@ extern void sweep2wake_setdev(struct input_dev * input_device) {
 }
 EXPORT_SYMBOL(sweep2wake_setdev);
 
-extern void sweep2wake_setleddev(struct led_classdev * led_dev) {
-	sweep2wake_leddev = led_dev;
-	return;
-}
-EXPORT_SYMBOL(sweep2wake_setleddev);
-
 static void sweep2wake_presspwr(struct work_struct * sweep2wake_presspwr_work) {
-	input_event(sweep2wake_pwrdev, EV_KEY, KEY_POWER, 1);
+// TODO: The right key? 
+	input_event(sweep2wake_pwrdev, EV_KEY, KEY_END, 1);
 	input_event(sweep2wake_pwrdev, EV_SYN, 0, 0);
 	msleep(100);
-	input_event(sweep2wake_pwrdev, EV_KEY, KEY_POWER, 0);
+	input_event(sweep2wake_pwrdev, EV_KEY, KEY_END, 0);
 	input_event(sweep2wake_pwrdev, EV_SYN, 0, 0);
 	msleep(100);
 	mutex_unlock(&pwrlock);
@@ -1054,7 +1044,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 			//TODO: Fix this!
-			// Right finger_event? Right x-values? Optional: search for right led-backlights
+			// Right finger_event? Right x-values?
 			//left->right
 			if ((ts->finger_data[i].down == 1) && (scr_suspended == true) && (s2w_switch == true)) {
 				prevx = 50;
@@ -1062,11 +1052,9 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 				if ((barrier[0] == true) ||
 				   ((ts->finger_data[i].x_data > prevx) &&
 				    (ts->finger_data[i].x_data < nextx) &&
-				    (ts->finger_data[i].y_data > 480))) {
+				    (ts->finger_data[i].y_data > 840))) {
 					if ((led_exec_count == true) && (scr_on_touch == false)) {
-						//leds-bd7885_drvx_led_brightness_set(sweep2wake_leddev, 255);
-						printk(KERN_INFO "[sweep2wake]: activated button_backlight");
-						led_exec_count = false;
+						printk(KERN_INFO "[sweep2wake]: first 50-150px");
 					}
 					prevx = 150;
 					nextx = 300;
@@ -1074,18 +1062,16 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 					if ((barrier[1] == true) ||
 					   ((ts->finger_data[i].x_data > prevx) &&
 					    (ts->finger_data[i].x_data < nextx) &&
-					    (ts->finger_data[i].y_data > 480))) {
+					    (ts->finger_data[i].y_data > 840))) {
 						prevx = 300;
 						barrier[1] = true;
 						if ((ts->finger_data[i].x_data > prevx) &&
-						    (ts->finger_data[i].y_data > 480)) {
-							if (ts->finger_data[i].x_data > 400) {
+						    (ts->finger_data[i].y_data > 840)) {
 								if (exec_count) {
 									printk(KERN_INFO "[sweep2wake]: ON");
 									sweep2wake_pwrtrigger();
 									exec_count = false;
 									break;
-								}
 							}
 						}
 					}
@@ -1627,7 +1613,7 @@ static void qtouch_ts_work_func(struct work_struct *work)
 				    (scr_on_touch == false) &&
 				    (exec_count == true)) {
 					//pm8058_drvx_led_brightness_set(sweep2wake_leddev, 0);
-					printk(KERN_INFO "[sweep2wake]: deactivated button_backlight");
+					printk(KERN_INFO "[sweep2wake]: finger released");
 				}
 				exec_count = true;
 				led_exec_count = true;
@@ -2093,9 +2079,7 @@ static int qtouch_ts_suspend(struct i2c_client *client, pm_message_t mesg)
 		//screen off, enable_irq_wake
 		scr_suspended = true;
 		enable_irq_wake(ts->client->irq);
-		//ensure backlight is turned off
-		//pm8058_drvx_led_brightness_set(sweep2wake_leddev, 0);
-		printk(KERN_INFO "[sweep2wake]: deactivated button_backlight | suspend");
+		printk(KERN_INFO "[sweep2wake]: suspend");
 	}
 #endif
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
