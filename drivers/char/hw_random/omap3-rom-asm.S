@@ -6,6 +6,8 @@
  * published by the Free Software Foundation.
  *
  */
+ 
+#ifdef CONFIG_HW_RANDOM_OMAP3_ROM
 
 #include <linux/linkage.h>
 #include <asm/assembler.h>
@@ -24,3 +26,4 @@ ENTRY(omap3_rng_call_rom_asm)
 	mcr	p15, 0, r0, c7, c5, 0
 	mov	r0, r12
 	ldmfd	sp!, {r4-r12, pc}
+#endif
