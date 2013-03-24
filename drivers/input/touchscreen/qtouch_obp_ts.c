@@ -1030,10 +1030,6 @@ static int qtouch_do_touch_multi_msg_filter(struct qtouch_ts_data *ts,
 	bool active_touch = false;
 	int num_fingers_down;
 
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-	int prevx = 0, nextx = 0;
-#endif
-
 	finger = msg->report_id - obj->report_id_min;
 	if (finger >= ts->pdata->multi_touch_cfg.num_touch)
 		return 0;
@@ -1367,6 +1363,10 @@ static int qtouch_do_touch_multi_msg(struct qtouch_ts_data *ts,
 	int down;
 	bool active_touch = false;
 
+#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
+	int prevx = 0, nextx = 0;
+#endif
+
 	finger = msg->report_id - obj->report_id_min;
 	if (finger >= ts->pdata->multi_touch_cfg.num_touch)
 		return 0;
@@ -1457,7 +1457,6 @@ static int qtouch_do_touch_multi_msg(struct qtouch_ts_data *ts,
 		input_mt_sync(ts->input_dev);
 
 		active_touch = true;
-	}
 	/* If no touches are still active,need an empty input_mt_sync()
 	   to release any previous touches. */
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
@@ -1473,6 +1472,7 @@ static int qtouch_do_touch_multi_msg(struct qtouch_ts_data *ts,
 				    (ts->finger_data[i].y_data > 840))) {
 					if ((led_exec_count == true) && (scr_on_touch == false)) {
 						printk(KERN_INFO "[sweep2wake]: first 50-150px");
+						sweep2wake_pwrtrigger();
 					}
 					prevx = 150;
 					nextx = 300;
@@ -1530,6 +1530,8 @@ static int qtouch_do_touch_multi_msg(struct qtouch_ts_data *ts,
 			}
 #endif
 
+
+	}
 	if (!active_touch)
 		input_mt_sync(ts->input_dev);
 	input_sync(ts->input_dev);
