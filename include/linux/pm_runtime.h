@@ -50,6 +50,31 @@ static inline void pm_runtime_put_noidle(struct device *dev)
 	atomic_add_unless(&dev->power.usage_count, -1, 0);
 }
 
+static inline bool device_run_wake(struct device *dev)
+{
+	return dev->power.run_wake;
+}
+
+static inline void device_set_run_wake(struct device *dev, bool enable)
+{
+	dev->power.run_wake = enable;
+}
+
+static inline bool pm_runtime_suspended(struct device *dev)
+{
+	return dev->power.runtime_status == RPM_SUSPENDED;
+}
+
+static inline bool pm_runtime_enabled(struct device *dev)
+{
+	return !dev->power.disable_depth;
+}
+
+static inline void pm_runtime_mark_last_busy(struct device *dev)
+{
+	ACCESS_ONCE(dev->power.last_busy) = jiffies;
+}
+
 #else /* !CONFIG_PM_RUNTIME */
 
 static inline int pm_runtime_idle(struct device *dev) { return -ENOSYS; }
@@ -73,6 +98,10 @@ static inline bool pm_children_suspended(struct device *dev) { return false; }
 static inline void pm_suspend_ignore_children(struct device *dev, bool en) {}
 static inline void pm_runtime_get_noresume(struct device *dev) {}
 static inline void pm_runtime_put_noidle(struct device *dev) {}
+static inline bool device_run_wake(struct device *dev) { return false; }
+static inline void device_set_run_wake(struct device *dev, bool enable) {}
+static inline bool pm_runtime_suspended(struct device *dev) { return false; }
+static inline bool pm_runtime_enabled(struct device *dev) { return false; }
 
 #endif /* !CONFIG_PM_RUNTIME */
 
