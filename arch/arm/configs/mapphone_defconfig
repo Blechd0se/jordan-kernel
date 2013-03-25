@@ -454,7 +454,7 @@ CONFIG_QUICK_WAKEUP=y
 CONFIG_ARCH_SUSPEND_POSSIBLE=y
 CONFIG_NET=y
 
-#
+##
 # Networking options
 #
 CONFIG_PACKET=y
@@ -682,8 +682,9 @@ CONFIG_IP6_NF_RAW=y
 CONFIG_WAN_ROUTER=y
 # CONFIG_PHONET is not set
 # CONFIG_IEEE802154 is not set
-# FCONFIG_NET_SCHED=y
+CONFIG_NET_SCHED=y
 # CONFIG_DCB is not set
+
 
 #
 # Network testing
