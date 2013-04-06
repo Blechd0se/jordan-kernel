@@ -177,22 +177,24 @@ extern void sweep2wake_setdev(struct input_dev * input_device) {
 EXPORT_SYMBOL(sweep2wake_setdev);
 
 static void sweep2wake_presspwr(struct work_struct * sweep2wake_presspwr_work) {
-// TODO: The right key? 
-	input_event(sweep2wake_pwrdev, EV_KEY, KEY_END, 1);
+// TODO: The right key?
+	if (!mutex_trylock(&pwrlock))
+		return;
+
+	input_event(sweep2wake_pwrdev, EV_KEY, KEY_END, 1); // KEY_END should be power button
 	input_event(sweep2wake_pwrdev, EV_SYN, 0, 0);
 	msleep(100);
 	input_event(sweep2wake_pwrdev, EV_KEY, KEY_END, 0);
 	input_event(sweep2wake_pwrdev, EV_SYN, 0, 0);
 	msleep(100);
-	mutex_unlock(&pwrlock);
+		mutex_unlock(&pwrlock);
 	return;
 }
 static DECLARE_WORK(sweep2wake_presspwr_work, sweep2wake_presspwr);
 
 void sweep2wake_pwrtrigger(void) {
-	if (mutex_trylock(&pwrlock)) {
-		schedule_work(&sweep2wake_presspwr_work);
-	}
+	
+	schedule_work(&sweep2wake_presspwr_work);
 	return;
 }
 #endif
@@ -1044,8 +1046,8 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 
 #ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
 			//TODO: Fix this!
-			// Right finger_event? Right x-values?
-			//left->right
+			// Right x-values?
+			// left->right
 			if ((ts->finger_data[i].down == 1) && (scr_suspended == true) && (s2w_switch == true)) {
 				prevx = 50;
 				nextx = 150;
@@ -1055,6 +1057,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 				    (ts->finger_data[i].y_data > 840))) {
 					if ((led_exec_count == true) && (scr_on_touch == false)) {
 						printk(KERN_INFO "[sweep2wake]: first 50-150px");
+						sweep2wake_pwrtrigger(); // for debug reasons
 					}
 					prevx = 150;
 					nextx = 300;
@@ -1079,6 +1082,7 @@ static int do_touch_multi_msg(struct qtouch_ts_data *ts, struct qtm_object *obj,
 					}
 				}
 			//right->left
+			// Doesn't work for now..
 			} else if ((ts->finger_data[i].down == 1) && (scr_suspended == false) && (s2w_switch == true)) {
 				scr_on_touch=true;
 				prevx = 400;
