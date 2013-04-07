@@ -16,6 +16,7 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/sdio.h>
 #include <linux/mmc/sdio_func.h>
+#include <linux/earlysuspend.h>
 
 #include "core.h"
 #include "bus.h"
@@ -223,6 +224,28 @@ static int sdio_enable_hs(struct mmc_card *card)
 }
 
 /*
+ * FIXME: mmc_stop_host and mmc_start_host won't work correctly. Why?
+ * Stop is called during boot and deletes wifi.
+ */
+
+static void wifi_early_suspend(struct early_suspend *handler, struct mmc_host *host)
+{
+	mmc_stop_host(host); // Disable Wifi completely here
+	printk("Wifi shut down.\n");
+}
+
+static void wifi_late_resume(struct early_suspend *handler, struct mmc_host *host)
+{
+	mmc_start_host(host);  // Enable Wifi back again...
+	printk("Wifi will restart.\n");
+}
+
+static struct early_suspend wifi_suspend = {
+	.suspend = wifi_early_suspend,
+	.resume = wifi_late_resume,
+};
+
+/*
  * Handle the detection and initialisation of a card.
  *
  * In the case of a resume, "oldcard" will contain the card
@@ -362,8 +385,8 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 		mmc_set_clock(host, 50000000);
 	} else {
 		mmc_set_clock(host, card->cis.max_dtr);
-	}
-
+	}	
+	
 	/*
 	 * Switch to wider bus (if supported).
 	 */
@@ -374,6 +397,8 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 	if (!oldcard)
 		host->card = card;
 	return 0;
+
+	register_early_suspend(&wifi_suspend);
 
 remove:
 	if (!oldcard)
@@ -452,73 +477,6 @@ out:
 	}
 }
 
-/*
- * SDIO suspend.  We need to suspend all functions separately.
- * Therefore all registered functions must have drivers with suspend
- * and resume methods.  Failing that we simply remove the whole card.
- */
-static int mmc_sdio_suspend(struct mmc_host *host)
-{
-	int i, err = 0;
-
-	for (i = 0; i < host->card->sdio_funcs; i++) {
-		struct sdio_func *func = host->card->sdio_func[i];
-		if (func && sdio_func_present(func) && func->dev.driver) {
-			const struct dev_pm_ops *pmops = func->dev.driver->pm;
-			if (!pmops || !pmops->suspend || !pmops->resume) {
-				/* force removal of entire card in that case */
-				err = -ENOSYS;
-			} else
-				err = pmops->suspend(&func->dev);
-			if (err)
-				break;
-		}
-	}
-	while (err && --i >= 0) {
-		struct sdio_func *func = host->card->sdio_func[i];
-		if (func && sdio_func_present(func) && func->dev.driver) {
-			const struct dev_pm_ops *pmops = func->dev.driver->pm;
-			pmops->resume(&func->dev);
-		}
-	}
-
-	return err;
-}
-
-static int mmc_sdio_resume(struct mmc_host *host)
-{
-	int i, err;
-
-	BUG_ON(!host);
-	BUG_ON(!host->card);
-
-	/* Basic card reinitialization. */
-	mmc_claim_host(host);
-	err = mmc_sdio_init_card(host, host->ocr, host->card,
-				 (host->pm_flags & MMC_PM_KEEP_POWER));
-	mmc_release_host(host);
-
-	/*
-	 * If the card looked to be the same as before suspending, then
-	 * we proceed to resume all card functions.  If one of them returns
-	 * an error then we simply return that error to the core and the
-	 * card will be redetected as new.  It is the responsibility of
-	 * the function driver to perform further tests with the extra
-	 * knowledge it has of the card to confirm the card is indeed the
-	 * same as before suspending (same MAC address for network cards,
-	 * etc.) and return an error otherwise.
-	 */
-	for (i = 0; !err && i < host->card->sdio_funcs; i++) {
-		struct sdio_func *func = host->card->sdio_func[i];
-		if (func && sdio_func_present(func) && func->dev.driver) {
-			const struct dev_pm_ops *pmops = func->dev.driver->pm;
-			err = pmops->resume(&func->dev);
-		}
-	}
-
-	return err;
-}
-
 static int mmc_sdio_power_restore(struct mmc_host *host)
 {
 	int ret;
@@ -540,8 +498,6 @@ static int mmc_sdio_power_restore(struct mmc_host *host)
 static const struct mmc_bus_ops mmc_sdio_ops = {
 	.remove = mmc_sdio_remove,
 	.detect = mmc_sdio_detect,
-	.suspend = mmc_sdio_suspend,
-	.resume = mmc_sdio_resume,
 	.power_restore = mmc_sdio_power_restore,
 };
 
