@@ -427,10 +427,10 @@ config FSYNC_CONTROL
 	help
 	  Say Y here to enable FSync Control
 
-config SMOOTHUI
-	bool "Support for Smooth UI"
+config WRITEBACK_CONTROL
+	bool "Support for dynamic writeback support"
 	default y
 	help
-	  Say Y here to enable Smooth UI
+	  Say Y here to enable dynamic Writeback
 
 endif # MISC_DEVICES
