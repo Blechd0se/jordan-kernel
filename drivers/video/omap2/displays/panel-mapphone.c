@@ -670,16 +670,16 @@ static int dsi_mipi_280_vm_320_240_panel_enable(struct omap_dss_device *dssdev)
 	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 10);
 
 	/* Load optimized red gamma (-) settings*/
-	data[0] = 0xEA;
-	data[1] = 0x04;
-	data[2] = 0x0B;
-	data[3] = 0x05;
-	data[4] = 0x21;
-	data[5] = 0x05;
-	data[6] = 0x0D;
-	data[7] = 0x01;
-	data[8] = 0x08;
-	data[9] = 0x04;
+	data[0] = 0xED;
+	data[1] = 0x07;
+	data[2] = 0x0E;
+	data[3] = 0x08;
+	data[4] = 0x24;
+	data[5] = 0x08;
+	data[6] = 0x0F;
+	data[7] = 0x04;
+	data[8] = 0x11;
+	data[9] = 0x07;
 	ret = dsi_vc_dcs_write(EDISCO_CMD_VC, data, 10);
 
 	/* Load optimized green gamma (+) settings*/

@@ -230,6 +230,7 @@ PAGEFLAG(WasActive, was_active)
 __PAGEFLAG(SlubFrozen, slub_frozen)
 __PAGEFLAG(SlubDebug, slub_debug)
 
+
 /*
  * Private page markings that may be used by the filesystem that owns the page
  * for its own purposes.

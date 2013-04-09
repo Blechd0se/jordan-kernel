@@ -1259,6 +1259,7 @@ repeat:
 			}
 		}
 	}
+	error = 0;
 
 	spin_lock(&info->lock);
 	shmem_recalc_inode(inode);
