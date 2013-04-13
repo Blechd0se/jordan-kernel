@@ -793,7 +793,7 @@ static void dirty_early_suspend(struct early_suspend *handler)
 {
 	if (writeback()) {
 		dirty_writeback_interval = 5 * 100;
-		dirty_expire_interval = 5 * 1000;
+		dirty_expire_interval = 30 * 100;
 	}
 	else {
 		// We need to set it to default:
@@ -806,8 +806,8 @@ static void dirty_early_suspend(struct early_suspend *handler)
 static void dirty_late_resume(struct early_suspend *handler)
 {
 	if (writeback()) {
-		dirty_writeback_interval = 2 * 2000;
-		dirty_expire_interval = 10 * 1000; 
+		dirty_writeback_interval = 10 * 100;
+		dirty_expire_interval = 6 * 1000; 
 	}
 	else {
 		// We need to set it to default:
