@@ -7,22 +7,12 @@
  */
 
 #include <linux/bootmem.h>
-#include <linux/kernel.h>
-#include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/spi/cpcap.h>
-#include <linux/spi/cpcap-regbits.h>
-#include <linux/input.h>
-#include <linux/clk.h>
 #include <linux/gpio.h>
-#include <linux/mtd/nand.h>
 #include <linux/of_fdt.h>
-#include <linux/of.h>
-#include <linux/led-lm3530.h>
 #include <linux/skbuff.h>
 #include <linux/ti_wilink_st.h>
-#include <plat/omap-serial.h>
-#include <plat/omap_hsi.h>
 #include <linux/wl12xx.h>
 #include <linux/regulator/machine.h>
 
@@ -30,17 +20,13 @@
 #include <asm/mach/arch.h>
 
 #include <plat/common.h>
-#include <plat/board.h>
-#include <plat/gpmc-smc91x.h>
 #include <plat/usb.h>
 #include <plat/system.h>
-#include <plat/mux.h>
 #include <plat/hdq.h>
+#include <plat/omap-serial.h>
 
 #include <mach/board-mapphone.h>
 
-#include "board-flash.h"
-#include "mux.h"
 #include "sdram-toshiba-hynix-numonyx.h"
 #include "omap_ion.h"
 #include "dt_path.h"
@@ -53,12 +39,14 @@
 #endif
 #include <../drivers/w1/w1_family.h> /* for W1_EEPROM_DS2502 */
 
-#define WILINK_UART_DEV_NAME "/dev/ttyO3" //Need Check it.
+#define WILINK_UART_DEV_NAME "/dev/ttyO1"
 
 #define MAPPHONE_POWER_OFF_GPIO 176
 #define MAPPHONE_WIFI_PMENA_GPIO 186
 #define MAPPHONE_WIFI_IRQ_GPIO 65
 #define MAPPHONE_BT_RESET_GPIO 21 //get_gpio_by_name("bt_reset_b")
+
+#define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
 
 char *bp_model = "CDMA";
 static char boot_mode[BOOT_MODE_MAX_LEN+1];
@@ -72,8 +60,6 @@ int __init board_boot_mode_init(char *s)
 }
 __setup("androidboot.mode=", board_boot_mode_init);
 
-/* Flat dev tree address */
-#define ATAG_FLAT_DEV_TREE_ADDRESS 0xf100040A
 struct tag_flat_dev_tree_address {
 	u32 address;
 	u32 size;
@@ -93,7 +79,6 @@ static int __init parse_tag_flat_dev_tree_address(const struct tag *tag)
 		fdt_size = fdt_addr->size;
 	}
 
-	/*have_of = 1;*/
 	printk(KERN_INFO
 		"flat_dev_tree_virt_address=0x%08x, flat_dev_tree_address=0x%08x, flat_dev_tree_size == 0x%08X\n",
 		fdt_start_address,
@@ -116,23 +101,26 @@ static int __init omap_hdq_init(void)
 	return platform_device_register(&omap_hdq_dev);
 }
 
-static int plat_kim_suspend(struct platform_device *pdev, pm_message_t state)
-{
-	return 0;
-}
-static int plat_kim_resume(struct platform_device *pdev)
-{
-	return 0;
-}
+static struct omap_musb_board_data musb_board_data = {
+	.interface_type         = MUSB_INTERFACE_ULPI,
+#ifdef CONFIG_USB_MUSB_OTG
+	.mode                   = MUSB_OTG,
+#elif defined(CONFIG_USB_MUSB_HDRC_HCD)
+	.mode                   = MUSB_HOST,
+#elif defined(CONFIG_USB_GADGET_MUSB_HDRC)
+	.mode                   = MUSB_PERIPHERAL,
+#endif
+	.power                  = 100,
+};
 
 /* wl127x BT, FM, GPS connectivity chip */
 struct ti_st_plat_data wilink_pdata = {
 	.nshutdown_gpio = MAPPHONE_BT_RESET_GPIO, 
 	.dev_name = WILINK_UART_DEV_NAME,
 	.flow_cntrl = 1,
-	.baud_rate = 3000000,
-	.suspend = plat_kim_suspend,
-	.resume = plat_kim_resume,
+	.baud_rate = 3686400,
+	.suspend = 0,
+	.resume = 0,
 };
 static struct platform_device wl127x_device = {
 	.name           = "kim",
@@ -151,7 +139,7 @@ static struct platform_device *mapphone_devices[] __initdata = {
 
 static struct wl12xx_platform_data mapphone_wlan_data __initdata = {
 	.irq = OMAP_GPIO_IRQ(MAPPHONE_WIFI_IRQ_GPIO),
-	.board_ref_clock = WL12XX_REFCLOCK_38,
+	.board_ref_clock = WL12XX_REFCLOCK_26,
 };
 
 int wifi_set_power(struct device *dev, int slot, int power_on, int vdd)
@@ -173,13 +161,14 @@ int wifi_set_power(struct device *dev, int slot, int power_on, int vdd)
 static void mapphone_wifi_init(void)
 {
 	int ret;
+
 	printk("mapphone_wifi_init\n");
 
 	ret = gpio_request(MAPPHONE_WIFI_PMENA_GPIO, "wifi_pmena");
 	if (ret < 0) {
 		printk(KERN_ERR "%s: can't reserve GPIO: %d\n", __func__,
 			MAPPHONE_WIFI_PMENA_GPIO);
-		return;
+		gpio_free(MAPPHONE_WIFI_PMENA_GPIO);
 	}
 	gpio_direction_output(MAPPHONE_WIFI_PMENA_GPIO, 0);
 
@@ -381,10 +370,13 @@ static void __init omap_mapphone_init(void)
 	mapphone_als_init();
 	omap_hdq_init();
 	mapphone_wifi_init();
+	usb_musb_init(&musb_board_data);
+	mapphone_usbhost_init();
 	mapphone_power_off_init();
 	mapphone_hsmmc_init();
 	omap_enable_smartreflex_on_init();
 	mapphone_create_board_props();
+	mapphone_gadget_init();
 	mapphone_sim_init();
 #ifdef CONFIG_EMU_UART_DEBUG
 	/* emu-uart function will override devtree iomux setting */
