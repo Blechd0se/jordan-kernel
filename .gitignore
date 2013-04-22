@@ -33,7 +33,7 @@ modules.builtin
 *.patch
 *.gcno
 *.sh
-arch/arm/boot/compressed/piggy.xzkern
+*.xzkern
 
 #
 # Top-level generic files
