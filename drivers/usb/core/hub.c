@@ -6,7 +6,7 @@
  * (C) Copyright 1999 Gregory P. Smith
  * (C) Copyright 2001 Brad Hards (bhards@bigpond.net.au)
  *
- */
+ */ 
 
 #include <linux/kernel.h>
 #include <linux/errno.h>
@@ -2056,129 +2056,6 @@ static unsigned hub_is_wusb(struct usb_hub *hub)
 #define HUB_LONG_RESET_TIME	200
 #define HUB_RESET_TIMEOUT	500
 
-static int hub_port_wait_reset(struct usb_hub *hub, int port1,
-				struct usb_device *udev, unsigned int delay)
-{
-	int delay_time, ret;
-	u16 portstatus;
-	u16 portchange;
-
-	for (delay_time = 0;
-			delay_time < HUB_RESET_TIMEOUT;
-			delay_time += delay) {
-		/* wait to give the device a chance to reset */
-		msleep(delay);
-
-		/* read and decode port status */
-		ret = hub_port_status(hub, port1, &portstatus, &portchange);
-		if (ret < 0)
-			return ret;
-
-		/* Device went away? */
-		if (!(portstatus & USB_PORT_STAT_CONNECTION))
-			return -ENOTCONN;
-
-		/* bomb out completely if the connection bounced */
-		if ((portchange & USB_PORT_STAT_C_CONNECTION))
-			return -ENOTCONN;
-
-		/* if we`ve finished resetting, then break out of the loop */
-		if (!(portstatus & USB_PORT_STAT_RESET) &&
-		    (portstatus & USB_PORT_STAT_ENABLE)) {
-			if (hub_is_wusb(hub))
-				udev->speed = USB_SPEED_WIRELESS;
-			else if (hub_is_superspeed(hub->hdev))
-				udev->speed = USB_SPEED_SUPER;
-			else if (portstatus & USB_PORT_STAT_HIGH_SPEED)
-				udev->speed = USB_SPEED_HIGH;
-			else if (portstatus & USB_PORT_STAT_LOW_SPEED)
-				udev->speed = USB_SPEED_LOW;
-			else
-				udev->speed = USB_SPEED_FULL;
-			return 0;
-		}
-
-		/* switch to the long delay after two short delay failures */
-		if (delay_time >= 2 * HUB_SHORT_RESET_TIME)
-			delay = HUB_LONG_RESET_TIME;
-
-		dev_dbg (hub->intfdev,
-			"port %d not reset yet, waiting %dms\n",
-			port1, delay);
-	}
-
-	return -EBUSY;
-}
-
-static int hub_port_reset(struct usb_hub *hub, int port1,
-				struct usb_device *udev, unsigned int delay)
-{
-	int i, status;
-	struct usb_hcd *hcd;
-
-	hcd = bus_to_hcd(udev->bus);
-	/* Block EHCI CF initialization during the port reset.
-	 * Some companion controllers don't like it when they mix.
-	 */
-	down_read(&ehci_cf_port_reset_rwsem);
-
-	/* Reset the port */
-	for (i = 0; i < PORT_RESET_TRIES; i++) {
-		status = set_port_feature(hub->hdev,
-				port1, USB_PORT_FEAT_RESET);
-		if (status)
-			dev_err(hub->intfdev,
-					"cannot reset port %d (err = %d)\n",
-					port1, status);
-		else {
-			status = hub_port_wait_reset(hub, port1, udev, delay);
-			if (status && status != -ENOTCONN)
-				dev_dbg(hub->intfdev,
-						"port_wait_reset: err = %d\n",
-						status);
-		}
-
-		/* return on disconnect or reset */
-		switch (status) {
-		case 0:
-			/* TRSTRCY = 10 ms; plus some extra */
-			msleep(10 + 40);
-			update_devnum(udev, 0);
-			if (hcd->driver->reset_device) {
-				status = hcd->driver->reset_device(hcd, udev);
-				if (status < 0) {
-					dev_err(&udev->dev, "Cannot reset "
-							"HCD device state\n");
-					break;
-				}
-			}
-			/* FALL THROUGH */
-		case -ENOTCONN:
-		case -ENODEV:
-			clear_port_feature(hub->hdev,
-				port1, USB_PORT_FEAT_C_RESET);
-			/* FIXME need disconnect() for NOTATTACHED device */
-			usb_set_device_state(udev, status
-					? USB_STATE_NOTATTACHED
-					: USB_STATE_DEFAULT);
-			goto done;
-		}
-
-		dev_dbg (hub->intfdev,
-			"port %d not enabled, trying reset again...\n",
-			port1);
-		delay = HUB_LONG_RESET_TIME;
-	}
-
-	dev_err (hub->intfdev,
-		"Cannot enable port %i.  Maybe the USB cable is bad?\n",
-		port1);
-
- done:
-	up_read(&ehci_cf_port_reset_rwsem);
-	return status;
-}
-
 /* Warm reset a USB3 protocol port */
 static int hub_port_warm_reset(struct usb_hub *hub, int port)
 {
@@ -2771,36 +2648,6 @@ EXPORT_SYMBOL_GPL(usb_ep0_reinit);
 
 #define usb_sndaddr0pipe()	(PIPE_CONTROL << 30)
 #define usb_rcvaddr0pipe()	((PIPE_CONTROL << 30) | USB_DIR_IN)
-
-static int hub_set_address(struct usb_device *udev, int devnum)
-{
-	int retval;
-	struct usb_hcd *hcd = bus_to_hcd(udev->bus);
-
-	/*
-	 * The host controller will choose the device address,
-	 * instead of the core having chosen it earlier
-	 */
-	if (!hcd->driver->address_device && devnum <= 1)
-		return -EINVAL;
-	if (udev->state == USB_STATE_ADDRESS)
-		return 0;
-	if (udev->state != USB_STATE_DEFAULT)
-		return -EINVAL;
-	if (hcd->driver->address_device)
-		retval = hcd->driver->address_device(hcd, udev);
-	else
-		retval = usb_control_msg(udev, usb_sndaddr0pipe(),
-				USB_REQ_SET_ADDRESS, 0, devnum, 0,
-				NULL, 0, USB_CTRL_SET_TIMEOUT);
-	if (retval == 0) {
-		update_devnum(udev, devnum);
-		/* Device now using proper address. */
-		usb_set_device_state(udev, USB_STATE_ADDRESS);
-		usb_ep0_reinit(udev);
-	}
-	return retval;
-}
 
 /* Reset device, (re)assign address, get device descriptor.
  * Device connection must be stable, no more debouncing needed.
