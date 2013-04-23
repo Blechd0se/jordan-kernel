@@ -141,54 +141,6 @@ again:
 	return status;
 }
 
-void omap_ehci_hw_phy_reset(const struct usb_hcd *hcd)
-{
-	struct device *dev = hcd->self.controller;
-	struct ehci_hcd_omap_platform_data  *pdata;
-
-	pdata = dev->platform_data;
-
-	if (gpio_is_valid(pdata->reset_gpio_port[0])) {
-		gpio_set_value(pdata->reset_gpio_port[0], 0);
-		mdelay(2);
-		gpio_set_value(pdata->reset_gpio_port[0], 1);
-		mdelay(2);
-	}
-
-	return;
-}
-
-static void omap_ehci_soft_phy_reset(struct platform_device *pdev, u8 port)
-{
-	struct usb_hcd	*hcd = dev_get_drvdata(&pdev->dev);
-	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
-	unsigned reg = 0;
-
-	reg = ULPI_FUNC_CTRL_RESET
-		/* FUNCTION_CTRL_SET register */
-		| (ULPI_SET(ULPI_FUNC_CTRL) << EHCI_INSNREG05_ULPI_REGADD_SHIFT)
-		/* Write */
-		| (2 << EHCI_INSNREG05_ULPI_OPSEL_SHIFT)
-		/* PORTn */
-		| ((port + 1) << EHCI_INSNREG05_ULPI_PORTSEL_SHIFT)
-		/* start ULPI access*/
-		| (1 << EHCI_INSNREG05_ULPI_CONTROL_SHIFT);
-
-	ehci_write(hcd->regs, EHCI_INSNREG05_ULPI, reg);
-
-	/* Wait for ULPI access completion */
-	while ((ehci_read(hcd->regs, EHCI_INSNREG05_ULPI)
-			& (1 << EHCI_INSNREG05_ULPI_CONTROL_SHIFT))) {
-		cpu_relax();
-
-		if (time_after(jiffies, timeout)) {
-			dev_dbg(&pdev->dev, "phy reset operation timed out\n");
-			break;
-		}
-	}
-}
-
-
 /* configure so an HC device and id are always provided */
 /* always called with process context; sleeping is OK */
 
@@ -378,14 +330,10 @@ static int ehci_hcd_omap_remove(struct platform_device *pdev)
 
 static void ehci_hcd_omap_shutdown(struct platform_device *pdev)
 {
-	struct device *dev	= &pdev->dev;
 	struct usb_hcd *hcd = dev_get_drvdata(&pdev->dev);
 
-	if (hcd->driver->shutdown) {
-		pm_runtime_get_sync(dev->parent);
+	if (hcd->driver->shutdown)
 		hcd->driver->shutdown(hcd);
-		pm_runtime_put(dev->parent);
-	}
 }
 
 static int ehci_omap_bus_suspend(struct usb_hcd *hcd)
