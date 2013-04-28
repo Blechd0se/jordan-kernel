@@ -193,63 +193,6 @@ static int sdio_disable_cd(struct mmc_card *card)
 }
 
 /*
- * Devices that remain active during a system suspend are
- * put back into 1-bit mode.
- */
-static int sdio_disable_wide(struct mmc_card *card)
-{
-	int ret;
-	u8 ctrl;
-
-	if (!(card->host->caps & MMC_CAP_4_BIT_DATA))
-		return 0;
-
-	if (card->cccr.low_speed && !card->cccr.wide_bus)
-		return 0;
-
-	ret = mmc_io_rw_direct(card, 0, 0, SDIO_CCCR_IF, 0, &ctrl);
-	if (ret)
-		return ret;
-
-	if (!(ctrl & SDIO_BUS_WIDTH_4BIT))
-		return 0;
-
-	ctrl &= ~SDIO_BUS_WIDTH_4BIT;
-	ctrl |= SDIO_BUS_ASYNC_INT;
-
-	ret = mmc_io_rw_direct(card, 1, 0, SDIO_CCCR_IF, ctrl, NULL);
-	if (ret)
-		return ret;
-
-	mmc_set_bus_width(card->host, MMC_BUS_WIDTH_1);
-
-	return 0;
-}
-
-
-static int sdio_enable_4bit_bus(struct mmc_card *card)
-{
-	int err;
-
-	if (card->type == MMC_TYPE_SDIO)
-		return sdio_enable_wide(card);
-
-	if ((card->host->caps & MMC_CAP_4_BIT_DATA) &&
-		(card->scr.bus_widths & SD_SCR_BUS_WIDTH_4)) {
-		err = mmc_app_set_bus_width(card, MMC_BUS_WIDTH_4);
-		if (err)
-			return err;
-	} else
-		return 0;
-
-	err = sdio_enable_wide(card);
-	if (err <= 0)
-		mmc_app_set_bus_width(card, MMC_BUS_WIDTH_1);
-
-	return err;
-}
-
-/*
  * Test if the card supports high-speed mode and, if so, switch to it.
  */
 static int sdio_enable_hs(struct mmc_card *card)
@@ -330,6 +273,14 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 		err = mmc_send_relative_addr(host, &card->rca);
 		if (err)
 			goto remove;
+
+		/*
+		 * Update oldcard with the new RCA received from the SDIO
+		 * device -- we're doing this so that it's updated in the
+		 * "card" struct when oldcard overwrites that later.
+		 */
+		if (oldcard)
+			oldcard->rca = card->rca;
 
 		mmc_set_bus_mode(host, MMC_BUSMODE_PUSHPULL);
 	}
@@ -416,13 +367,9 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 	/*
 	 * Switch to wider bus (if supported).
 	 */
-	err = sdio_enable_4bit_bus(card);
-	if (err > 0)
-		mmc_set_bus_width(card->host, MMC_BUS_WIDTH_4);
-	else if (err)
+	err = sdio_enable_wide(card);
+	if (err)
 		goto remove;
-
-
 
 	if (!oldcard)
 		host->card = card;
@@ -497,6 +444,7 @@ static void mmc_sdio_detect(struct mmc_host *host)
 	if (host->caps & MMC_CAP_POWER_OFF_CARD)
 		pm_runtime_put_sync(&host->card->dev);
 
+
 out:
 	if (err) {
 		mmc_sdio_remove(host);
@@ -505,9 +453,6 @@ out:
 		mmc_detach_bus(host);
 		mmc_release_host(host);
 	}
-
-	/* Tell PM core that we're done */
-	pm_runtime_put(&host->card->dev);
 }
 
 /*
@@ -540,9 +485,9 @@ static int mmc_sdio_suspend(struct mmc_host *host)
 		}
 	}
 
-	if (!err && mmc_card_keep_power(host) && mmc_card_wake_sdio_irq(host)) {
+	if (!err && (host->pm_flags & MMC_PM_KEEP_POWER)) {
 		mmc_claim_host(host);
-		sdio_disable_wide(host->card);
+		//sdio_disable_wide(host->card);
 		mmc_release_host(host);
 	}
 
@@ -551,29 +496,15 @@ static int mmc_sdio_suspend(struct mmc_host *host)
 
 static int mmc_sdio_resume(struct mmc_host *host)
 {
-	int i, err = 0;
+	int i, err;
 
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
 	/* Basic card reinitialization. */
 	mmc_claim_host(host);
-
-	/* No need to reinitialize powered-resumed nonremovable cards */
-	if (mmc_card_is_removable(host) || !mmc_card_keep_power(host))
-		err = mmc_sdio_init_card(host, host->ocr, host->card,
-					mmc_card_keep_power(host));
-	else if (mmc_card_keep_power(host) && mmc_card_wake_sdio_irq(host)) {
-		/* We may have switched to 1-bit mode during suspend */
-		err = sdio_enable_4bit_bus(host->card);
-		if (err > 0) {
-			mmc_set_bus_width(host, MMC_BUS_WIDTH_4);
-			err = 0;
-		}
-	}
-
-	if (!err && host->sdio_irqs)
-		mmc_signal_sdio_irq(host);
+	err = mmc_sdio_init_card(host, host->ocr, host->card,
+				 (host->pm_flags & MMC_PM_KEEP_POWER));
 	mmc_release_host(host);
 
 	/*
@@ -674,20 +605,20 @@ int mmc_attach_sdio(struct mmc_host *host, u32 ocr)
 	card->sdio_funcs = funcs = (ocr & 0x70000000) >> 28;
 
 	/*
-	 * Enable runtime PM only if supported by host+card+board
+         * Enable runtime PM only if supported by host+card+board
 	 */
 	if (host->caps & MMC_CAP_POWER_OFF_CARD) {
-		/*
-		 * Let runtime PM core know our card is active
-		 */
+	/*
+	 * Let runtime PM core know our card is active
+ 	 */
 		err = pm_runtime_set_active(&card->dev);
 		if (err)
 			goto remove;
 
-		/*
-		 * Enable runtime PM for this card
-		 */
-		pm_runtime_enable(&card->dev);
+	/*
+	 * Enable runtime PM for this card
+	 */
+	pm_runtime_enable(&card->dev);
 	}
 
 	/*
@@ -705,11 +636,11 @@ int mmc_attach_sdio(struct mmc_host *host, u32 ocr)
 		if (err)
 			goto remove;
 
-		/*
-		 * Enable Runtime PM for this func (if supported)
-		 */
+	/*
+	 * Enable Runtime PM for this func (if supported)
+	 */
 		if (host->caps & MMC_CAP_POWER_OFF_CARD)
-			pm_runtime_enable(&card->sdio_func[i]->dev);
+		pm_runtime_enable(&card->sdio_func[i]->dev);
 	}
 
 	mmc_release_host(host);
