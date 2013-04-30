@@ -9,6 +9,10 @@
 #define OMAP3_HS_USB_PORTS	3
 
 enum usbhs_omap_port_mode {
+	
+	/* ULPI_BYPASS = 0 */
+	EHCI_HCD_OMAP_MODE_ULPI_PHY,
+
 	OMAP_USBHS_PORT_MODE_UNUSED,
 	OMAP_EHCI_PORT_MODE_PHY,
 	OMAP_EHCI_PORT_MODE_TLL,
@@ -22,7 +26,28 @@ enum usbhs_omap_port_mode {
 	OMAP_OHCI_PORT_MODE_TLL_3PIN_DATSE0,
 	OMAP_OHCI_PORT_MODE_TLL_4PIN_DPDM,
 	OMAP_OHCI_PORT_MODE_TLL_2PIN_DATSE0,
-	OMAP_OHCI_PORT_MODE_TLL_2PIN_DPDM
+	OMAP_OHCI_PORT_MODE_TLL_2PIN_DPDM,
+
+	/* ULPI_BYPASS = 1, CHANMODE = 0 */	
+	EHCI_HCD_OMAP_MODE_ULPI_TLL_SDR,        /* ULPIDDRMODE = 0 */
+	EHCI_HCD_OMAP_MODE_ULPI_TLL_DDR,        /* ULPIDDRMODE = 1 */
+};
+
+#define EHCI_HCD_OMAP_FLAG_ENABLED	(1<<0)	
+#define EHCI_HCD_OMAP_FLAG_NOBITSTUFF	(1<<1)	
+#define EHCI_HCD_OMAP_FLAG_AUTOIDLE	(1<<2)
+
+struct ehci_hcd_omap_port_data {
+	enum usbhs_omap_port_mode	mode;
+
+	u32				flags;
+
+	int				reset_delay;
+
+	int	(*startup)(struct platform_device *dev, int port);
+	void	(*shutdown)(struct platform_device *dev, int port);
+	void	(*reset)(struct platform_device *dev, int port, int reset);
+	void	(*suspend)(struct platform_device *dev, int port, int suspend);
 };
 
 struct usbhs_omap_board_data {
@@ -60,6 +85,9 @@ struct ehci_hcd_omap_platform_data {
 	int				reset_gpio_port[OMAP3_HS_USB_PORTS];
 	struct regulator		*regulator[OMAP3_HS_USB_PORTS];
 	unsigned			phy_reset:1;
+
+	int (*usbhost_standby_status)(void);
+
 	/*
 	 * Each Port can have an external transceiver requiring clock control
 	 * for low power mode entry

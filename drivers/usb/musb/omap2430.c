@@ -60,51 +60,6 @@ static void __iomem *usbphy_base;
 static void __iomem *ocp2scp_base;
 
 #if defined(CONFIG_USB_MOT_ANDROID) && defined(CONFIG_USB_MUSB_OTG)
-static int set_phy_clk(int on)
-{
-	static int state;
-	struct clk *phyclk;
-	struct clk *clk48m;
-	struct clk *clk32k;
-
-	phyclk = clk_get(NULL, "ocp2scp_usb_phy_ick");
-	if (IS_ERR(phyclk)) {
-		pr_warning("cannot clk_get ocp2scp_usb_phy_ick\n");
-		return PTR_ERR(phyclk);
-	}
-
-	clk48m = clk_get(NULL, "ocp2scp_usb_phy_phy_48m");
-	if (IS_ERR(clk48m)) {
-		pr_warning("cannot clk_get ocp2scp_usb_phy_phy_48m\n");
-		clk_put(phyclk);
-		return PTR_ERR(clk48m);
-	}
-
-	clk32k = clk_get(NULL, "usb_phy_cm_clk32k");
-	if (IS_ERR(clk32k)) {
-		pr_warning("cannot clk_get usb_phy_cm_clk32k\n");
-		clk_put(phyclk);
-		clk_put(clk48m);
-		return PTR_ERR(clk32k);
-	}
-
-	if (on) {
-		if (!state) {
-			/* Enable the phy clocks*/
-			clk_enable(phyclk);
-			clk_enable(clk48m);
-			clk_enable(clk32k);
-			state = 1;
-		}
-	} else if (state) {
-		/* Disable the phy clocks*/
-		clk_disable(phyclk);
-		clk_disable(clk48m);
-		clk_disable(clk32k);
-		state = 0;
-	}
-	return 0;
-}
 
 int usb_phy_drive_strength_control(void){
 	/* For a correct read out of the USBPHY registers,
@@ -131,31 +86,6 @@ int usb_phy_drive_strength_control(void){
 	return 0;
 }
 
-static int phy_init(void)
-{
-   if (cpu_is_omap44xx()) 
-	set_phy_clk(1);
-
-#ifndef CONFIG_EMU_UART_DEBUG
-	if (__raw_readl(ctrl_base + CONTROL_DEV_CONF) & PHY_PD) {
-		__raw_writel(~PHY_PD, ctrl_base + CONTROL_DEV_CONF);
-		msleep(200);
-	}
-#endif
-	if (cpu_is_omap44xx()) {
-		if (usb_phy_drive_strength_control())
-			DBG(1, "Eye diagram opening increase setting failed!");
-	}
-
-	return 0;
-}
-
-static void phy_shutdown(void)
-{
-	   if (cpu_is_omap44xx()) 
-		set_phy_clk(0);
-	__raw_writel(PHY_PD, ctrl_base + CONTROL_DEV_CONF);
-}
 #endif /*CONFIG_USB_MOT_ANDROID*/
 
 void musb_enable_vbus(struct musb *musb)
@@ -191,7 +121,6 @@ void cpcap_musb_notifier_call(unsigned long event)
 	struct omap_musb_board_data *data = pdata->board_data;
 	static int hostmode;
 	u32 val;
-	u8 power;
 	printk("cpcap_musb_notifier_call \n");
 	switch (event) {
 	case USB_EVENT_ID:
@@ -482,7 +411,6 @@ static void omap2430_musb_try_idle(struct musb *musb, unsigned long timeout)
 static void omap2430_musb_set_vbus(struct musb *musb, int is_on)
 {
 	u8		devctl;
-	unsigned long timeout = jiffies + msecs_to_jiffies(1000);
 	int ret = 1;
 	/* HDRC controls CPEN, but beware current surges during device
 	 * connect.  They can trigger transient overcurrent conditions
@@ -549,137 +477,6 @@ static inline void omap2430_low_level_init(struct musb *musb)
 	l = musb_readl(musb->mregs, OTG_FORCESTDBY);
 	l &= ~ENABLEFORCE;	/* disable MSTANDBY */
 	musb_writel(musb->mregs, OTG_FORCESTDBY, l);
-}
-
-/* blocking notifier support */
-static void musb_otg_notifier_work(struct work_struct *data_notifier_work);
-
-static int musb_otg_notifications(struct notifier_block *nb,
-		unsigned long event, void *unused)
-{
-	struct musb	*musb = container_of(nb, struct musb, nb);
-	struct musb_otg_work *otg_work;
-
-	otg_work = kmalloc(sizeof(struct musb_otg_work), GFP_ATOMIC);
-	if (!otg_work)
-		return notifier_from_errno(-ENOMEM);
-	INIT_WORK(&otg_work->work, musb_otg_notifier_work);
-	otg_work->xceiv_event = event;
-	otg_work->musb = musb;
-	queue_work(musb->otg_notifier_wq, &otg_work->work);
-	return 0;
-}
-
-static void musb_otg_notifier_work(struct work_struct *data_notifier_work)
-{
-	u32 val;
-	struct musb_otg_work *otg_work =
-		container_of(data_notifier_work, struct musb_otg_work, work);
-	struct musb *musb = otg_work->musb;
-	struct device *dev = musb->controller;
-	struct musb_hdrc_platform_data *pdata = dev->platform_data;
-	struct omap_musb_board_data *data = pdata->board_data;
-	enum usb_xceiv_events xceiv_event = otg_work->xceiv_event;
-
-	kfree(otg_work);
-
-	switch (xceiv_event) {
-	case USB_EVENT_ID:
-		dev_dbg(musb->controller, "ID GND\n");
-
-		if (is_otg_enabled(musb)) {
-#ifdef CONFIG_USB_GADGET_MUSB_HDRC
-			if (musb->gadget_driver) {
-				pm_runtime_get_sync(musb->controller);
-				val = musb_readl(musb->mregs, OTG_INTERFSEL);
-				if (data->interface_type ==
-						MUSB_INTERFACE_UTMI) {
-					val &= ~ULPI_12PIN;
-					val |= UTMI_8BIT;
-				} else {
-					val |= ULPI_12PIN;
-				}
-				musb_writel(musb->mregs, OTG_INTERFSEL, val);
-
-				otg_init(musb->xceiv);
-				omap2430_musb_set_vbus(musb, 1);
-			}
-#endif
-		} else {
-			pm_runtime_get_sync(musb->controller);
-			val = musb_readl(musb->mregs, OTG_INTERFSEL);
-			if (data->interface_type == MUSB_INTERFACE_UTMI) {
-				val &= ~ULPI_12PIN;
-				val |= UTMI_8BIT;
-			} else {
-				val |= ULPI_12PIN;
-			}
-			musb_writel(musb->mregs, OTG_INTERFSEL, val);
-
-			otg_init(musb->xceiv);
-			omap2430_musb_set_vbus(musb, 1);
-		}
-		break;
-
-	case USB_EVENT_CHARGER:
-		dev_dbg(musb->controller, "Dedicated charger connect\n");
-		musb->is_ac_charger = true;
-		break;
-
-	case USB_EVENT_VBUS:
-		dev_dbg(musb->controller, "VBUS Connect\n");
-
-#ifdef CONFIG_USB_GADGET_MUSB_HDRC
-		if (musb->gadget_driver) {
-			pm_runtime_get_sync(musb->controller);
-			val = musb_readl(musb->mregs, OTG_INTERFSEL);
-			if (data->interface_type ==
-					MUSB_INTERFACE_UTMI) {
-				val &= ~ULPI_12PIN;
-				val |= UTMI_8BIT;
-			} else {
-				val |= ULPI_12PIN;
-			}
-			musb_writel(musb->mregs, OTG_INTERFSEL, val);
-		}
-
-#endif
-		otg_init(musb->xceiv);
-		break;
-
-	case USB_EVENT_NONE:
-		if (musb->is_ac_charger) {
-			dev_dbg(musb->controller,
-				"Dedicated charger disconnect\n");
-			musb->is_ac_charger = false;
-			break;
-		}
-
-		dev_dbg(musb->controller, "VBUS Disconnect\n");
-
-#ifdef CONFIG_USB_GADGET_MUSB_HDRC
-		if (is_otg_enabled(musb) || is_peripheral_enabled(musb))
-			if (musb->gadget_driver)
-#endif
-			{
-				pm_runtime_mark_last_busy(musb->controller);
-				pm_runtime_put_autosuspend(musb->controller);
-			}
-
-		if (data->interface_type == MUSB_INTERFACE_UTMI) {
-			omap2430_musb_set_vbus(musb, 0);
-			if (musb->xceiv->set_vbus)
-				otg_set_vbus(musb->xceiv, 0);
-		}
-		otg_shutdown(musb->xceiv);
-		val = musb_readl(musb->mregs, OTG_INTERFSEL);
-		val |= ULPI_12PIN;
-		musb_writel(musb->mregs, OTG_INTERFSEL, val);
-		break;
-	default:
-		dev_dbg(musb->controller, "ID float\n");
-	}
-
 }
 
 static int omap2430_musb_init(struct musb *musb)
@@ -772,9 +569,6 @@ err2:
 #ifdef MUSB_WORKQUEUE
 		destroy_workqueue(musb->otg_notifier_wq);
 #endif
-err1:
-	otg_put_transceiver(musb->xceiv);
-	pm_runtime_disable(dev);
 	return status;
 }
 

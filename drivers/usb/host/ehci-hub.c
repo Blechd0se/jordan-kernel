@@ -1,4 +1,4 @@
- /*
+/*
  * Copyright (C) 2001-2004 by David Brownell
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -27,8 +27,6 @@
  */
 
 /*-------------------------------------------------------------------------*/
-#include <linux/usb/otg.h>
-#include <linux/gpio.h>
 
 #define	PORT_WAKE_BITS	(PORT_WKOC_E|PORT_WKDISC_E|PORT_WKCONN_E)
 
@@ -108,106 +106,22 @@ static void ehci_handover_companion_ports(struct ehci_hcd *ehci)
 	ehci->owned_ports = 0;
 }
 
-static int ehci_port_change(struct ehci_hcd *ehci)
-{
-	int i = HCS_N_PORTS(ehci->hcs_params);
-
-	/* First check if the controller indicates a change event */
-
-	if (ehci_readl(ehci, &ehci->regs->status) & STS_PCD)
-		return 1;
-
-	/*
-	 * Not all controllers appear to update this while going from D3 to D0,
-	 * so check the individual port status registers as well
-	 */
-
-	while (i--)
-		if (ehci_readl(ehci, &ehci->regs->port_status[i]) & PORT_CSC)
-			return 1;
-
-	return 0;
-}
-
-static __maybe_unused void ehci_adjust_port_wakeup_flags(struct ehci_hcd *ehci,
-		bool suspending, bool do_wakeup)
-{
-	int		port;
-	u32		temp;
-	unsigned long	flags;
-
-	/* If remote wakeup is enabled for the root hub but disabled
-	 * for the controller, we must adjust all the port wakeup flags
-	 * when the controller is suspended or resumed.  In all other
-	 * cases they don't need to be changed.
-	 */
-	if (!ehci_to_hcd(ehci)->self.root_hub->do_remote_wakeup || do_wakeup)
-		return;
-
-	spin_lock_irqsave(&ehci->lock, flags);
-
-	/* clear phy low-power mode before changing wakeup flags */
-	if (ehci->has_hostpc) {
-		port = HCS_N_PORTS(ehci->hcs_params);
-		while (port--) {
-			u32 __iomem	*hostpc_reg;
-
-			hostpc_reg = (u32 __iomem *)((u8 *) ehci->regs
-					+ HOSTPC0 + 4 * port);
-			temp = ehci_readl(ehci, hostpc_reg);
-			ehci_writel(ehci, temp & ~HOSTPC_PHCD, hostpc_reg);
-		}
-		spin_unlock_irqrestore(&ehci->lock, flags);
-		msleep(5);
-		spin_lock_irqsave(&ehci->lock, flags);
-	}
-
-	port = HCS_N_PORTS(ehci->hcs_params);
-	while (port--) {
-		u32 __iomem	*reg = &ehci->regs->port_status[port];
-		u32		t1 = ehci_readl(ehci, reg) & ~PORT_RWC_BITS;
-		u32		t2 = t1 & ~PORT_WAKE_BITS;
-
-		/* If we are suspending the controller, clear the flags.
-		 * If we are resuming the controller, set the wakeup flags.
-		 */
-		if (!suspending) {
-			if (t1 & PORT_CONNECT)
-				t2 |= PORT_WKOC_E | PORT_WKDISC_E;
-			else
-				t2 |= PORT_WKOC_E | PORT_WKCONN_E;
-		}
-		ehci_vdbg(ehci, "port %d, %08x -> %08x\n",
-				port + 1, t1, t2);
-		ehci_writel(ehci, t2, reg);
-	}
-
-	/* enter phy low-power mode again */
-	if (ehci->has_hostpc) {
-		port = HCS_N_PORTS(ehci->hcs_params);
-		while (port--) {
-			u32 __iomem	*hostpc_reg;
-
-			hostpc_reg = (u32 __iomem *)((u8 *) ehci->regs
-					+ HOSTPC0 + 4 * port);
-			temp = ehci_readl(ehci, hostpc_reg);
-			ehci_writel(ehci, temp | HOSTPC_PHCD, hostpc_reg);
-		}
-	}
-
-	/* Does the root hub have a port wakeup pending? */
-	if (!suspending && ehci_port_change(ehci))
-		usb_hcd_resume_root_hub(ehci_to_hcd(ehci));
-
-	spin_unlock_irqrestore(&ehci->lock, flags);
-}
-
 static int ehci_bus_suspend (struct usb_hcd *hcd)
 {
 	struct ehci_hcd		*ehci = hcd_to_ehci (hcd);
 	int			port;
 	int			mask;
-	int			changed;
+	u32 __iomem		*hostpc_reg = NULL;
+
+	port = HCS_N_PORTS(ehci->hcs_params);
+	while (port--) {
+		u32 __iomem	*reg = &ehci->regs->port_status[port];
+		u32		t1 = ehci_readl(ehci, reg);
+		if (t1 & PORT_RESUME) {
+			//LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, 0x4D);
+			return -EBUSY;
+		}
+	}
 
 	ehci_dbg(ehci, "suspend root hub\n");
 
@@ -223,7 +137,9 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 	 * for the root hub and any ports are in the middle of a resume or
 	 * remote wakeup, we must fail the suspend.
 	 */
+#ifndef CONFIG_MACH_MAPPHONE
 	if (hcd->self.root_hub->do_remote_wakeup) {
+#endif
 		port = HCS_N_PORTS(ehci->hcs_params);
 		while (port--) {
 			if (ehci->reset_done[port] != 0) {
@@ -234,7 +150,9 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 				return -EBUSY;
 			}
 		}
+#ifndef CONFIG_MACH_MAPPHONE
 	}
+#endif
 
 	/* stop schedules, clean any completed work */
 	if (HC_IS_RUNNING(hcd->state)) {
@@ -251,13 +169,15 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 	 */
 	ehci->bus_suspended = 0;
 	ehci->owned_ports = 0;
-	changed = 0;
 	port = HCS_N_PORTS(ehci->hcs_params);
 	while (port--) {
 		u32 __iomem	*reg = &ehci->regs->port_status [port];
 		u32		t1 = ehci_readl(ehci, reg) & ~PORT_RWC_BITS;
-		u32		t2 = t1 & ~PORT_WAKE_BITS;
+		u32		t2 = t1;
 
+		if (ehci->has_hostpc)
+			hostpc_reg = (u32 __iomem *)((u8 *)ehci->regs
+				+ HOSTPC0 + 4 * (port & 0xff));
 		/* keep track of which ports we suspend */
 		if (t1 & PORT_OWNER)
 			set_bit(port, &ehci->owned_ports);
@@ -266,45 +186,38 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 			set_bit(port, &ehci->bus_suspended);
 		}
 
-		/* enable remote wakeup on all ports, if told to do so */
+		/* enable remote wakeup on all ports */
 		if (hcd->self.root_hub->do_remote_wakeup) {
 			/* only enable appropriate wake bits, otherwise the
 			 * hardware can not go phy low power mode. If a race
 			 * condition happens here(connection change during bits
 			 * set), the port change detection will finally fix it.
 			 */
-			if (t1 & PORT_CONNECT)
+			if (t1 & PORT_CONNECT) {
 				t2 |= PORT_WKOC_E | PORT_WKDISC_E;
-			else
+				t2 &= ~PORT_WKCONN_E;
+			} else {
 				t2 |= PORT_WKOC_E | PORT_WKCONN_E;
-		}
+				t2 &= ~PORT_WKDISC_E;
+			}
+		} else
+			t2 &= ~PORT_WAKE_BITS;
 
 		if (t1 != t2) {
 			ehci_vdbg (ehci, "port %d, %08x -> %08x\n",
 				port + 1, t1, t2);
 			ehci_writel(ehci, t2, reg);
-			changed = 1;
-		}
-	}
+			if (hostpc_reg) {
+				u32	t3;
 
-	if (changed && ehci->has_hostpc) {
-		spin_unlock_irq(&ehci->lock);
-		msleep(5);	/* 5 ms for HCD to enter low-power mode */
-		spin_lock_irq(&ehci->lock);
-
-		port = HCS_N_PORTS(ehci->hcs_params);
-		while (port--) {
-			u32 __iomem	*hostpc_reg;
-			u32		t3;
-
-			hostpc_reg = (u32 __iomem *)((u8 *) ehci->regs
-					+ HOSTPC0 + 4 * port);
-			t3 = ehci_readl(ehci, hostpc_reg);
-			ehci_writel(ehci, t3 | HOSTPC_PHCD, hostpc_reg);
-			t3 = ehci_readl(ehci, hostpc_reg);
-			ehci_dbg(ehci, "Port %d phy low-power mode %s\n",
+				msleep(5);/* 5ms for HCD enter low pwr mode */
+				t3 = ehci_readl(ehci, hostpc_reg);
+				ehci_writel(ehci, t3 | HOSTPC_PHCD, hostpc_reg);
+				t3 = ehci_readl(ehci, hostpc_reg);
+				ehci_dbg(ehci, "Port%d phy low pwr mode %s\n",
 					port, (t3 & HOSTPC_PHCD) ?
 					"succeeded" : "failed");
+			}
 		}
 	}
 
@@ -327,6 +240,7 @@ static int ehci_bus_suspend (struct usb_hcd *hcd)
 	ehci_readl(ehci, &ehci->regs->intr_enable);
 
 	ehci->next_statechange = jiffies + msecs_to_jiffies(10);
+//	LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, 0x40);
 	spin_unlock_irq (&ehci->lock);
 
 	/* ehci_work() may have re-enabled the watchdog timer, which we do not
@@ -344,18 +258,18 @@ static int ehci_bus_resume (struct usb_hcd *hcd)
 	u32			temp;
 	u32			power_okay;
 	int			i;
-	unsigned long		resume_needed = 0;
+	u8			resume_needed = 0;
 
 	if (time_before (jiffies, ehci->next_statechange))
 		msleep(5);
 	spin_lock_irq (&ehci->lock);
-	if (!HCD_HW_ACCESSIBLE(hcd)) {
+	if (!test_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags)) {
 		spin_unlock_irq(&ehci->lock);
 		return -ESHUTDOWN;
 	}
 
 	if (unlikely(ehci->debug)) {
-		if (!dbgp_reset_prep())
+		if (ehci->debug && !dbgp_reset_prep())
 			ehci->debug = NULL;
 		else
 			dbgp_external_startup();
@@ -384,30 +298,13 @@ static int ehci_bus_resume (struct usb_hcd *hcd)
 	/* restore CMD_RUN, framelist size, and irq threshold */
 	ehci_writel(ehci, ehci->command, &ehci->regs->command);
 
+#ifndef CONFIG_ARCH_OMAP
 	/* Some controller/firmware combinations need a delay during which
 	 * they set up the port statuses.  See Bugzilla #8190. */
 	spin_unlock_irq(&ehci->lock);
 	msleep(8);
 	spin_lock_irq(&ehci->lock);
-
-	/* clear phy low-power mode before resume */
-	if (ehci->bus_suspended && ehci->has_hostpc) {
-		i = HCS_N_PORTS(ehci->hcs_params);
-		while (i--) {
-			if (test_bit(i, &ehci->bus_suspended)) {
-				u32 __iomem	*hostpc_reg;
-
-				hostpc_reg = (u32 __iomem *)((u8 *) ehci->regs
-						+ HOSTPC0 + 4 * i);
-				temp = ehci_readl(ehci, hostpc_reg);
-				ehci_writel(ehci, temp & ~HOSTPC_PHCD,
-						hostpc_reg);
-			}
-		}
-		spin_unlock_irq(&ehci->lock);
-		msleep(5);
-		spin_lock_irq(&ehci->lock);
-	}
+#endif
 
 	/* manually resume the ports we suspended during bus_suspend() */
 	i = HCS_N_PORTS (ehci->hcs_params);
@@ -417,13 +314,14 @@ static int ehci_bus_resume (struct usb_hcd *hcd)
 		if (test_bit(i, &ehci->bus_suspended) &&
 				(temp & PORT_SUSPEND)) {
 			temp |= PORT_RESUME;
-			set_bit(i, &resume_needed);
+			resume_needed = 1;
 		}
 		ehci_writel(ehci, temp, &ehci->regs->port_status [i]);
 	}
 
 	/* msleep for 20ms only if code is trying to resume port */
 	if (resume_needed) {
+		//LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, 0x31);
 		spin_unlock_irq(&ehci->lock);
 		msleep(20);
 		spin_lock_irq(&ehci->lock);
@@ -432,7 +330,8 @@ static int ehci_bus_resume (struct usb_hcd *hcd)
 	i = HCS_N_PORTS (ehci->hcs_params);
 	while (i--) {
 		temp = ehci_readl(ehci, &ehci->regs->port_status [i]);
-		if (test_bit(i, &resume_needed)) {
+		if (test_bit(i, &ehci->bus_suspended) &&
+				(temp & PORT_SUSPEND)) {
 			temp &= ~(PORT_RWC_BITS | PORT_RESUME);
 			ehci_writel(ehci, temp, &ehci->regs->port_status [i]);
 			ehci_vdbg (ehci, "resumed port %d\n", i + 1);
@@ -457,6 +356,8 @@ static int ehci_bus_resume (struct usb_hcd *hcd)
 	/* Now we can safely re-enable irqs */
 	ehci_writel(ehci, INTR_MASK, &ehci->regs->intr_enable);
 
+//	LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, 0x32);
+//	LOG_USBHOST_ACTIVITY(aUsbHostDbg, iUsbHostDbg, jiffies);
 	spin_unlock_irq (&ehci->lock);
 	ehci_handover_companion_ports(ehci);
 	return 0;
@@ -560,15 +461,14 @@ static ssize_t store_companion(struct device *dev,
 }
 static DEVICE_ATTR(companion, 0644, show_companion, store_companion);
 
-static inline int create_companion_file(struct ehci_hcd *ehci)
+static inline void create_companion_file(struct ehci_hcd *ehci)
 {
-	int	i = 0;
+	int	i;
 
 	/* with integrated TT there is no companion! */
 	if (!ehci_is_TDI(ehci))
 		i = device_create_file(ehci_to_hcd(ehci)->self.controller,
 				       &dev_attr_companion);
-	return i;
 }
 
 static inline void remove_companion_file(struct ehci_hcd *ehci)
@@ -602,20 +502,28 @@ static int check_reset_complete (
 			return port_status;
 		}
 
-		if (ehci->no_companion_port_handoff) {
-			/* on omap, we can't hand off companion port */
-			ehci_dbg(ehci, "port %d FS device detected - cannot handoff port\n",
-				index + 1);
-			return port_status;
-		}
-
 		ehci_dbg (ehci, "port %d full speed --> companion\n",
 			index + 1);
 
-		// what happens if HCS_N_CC(params) == 0 ?
-		port_status |= PORT_OWNER;
-		port_status &= ~PORT_RWC_BITS;
-		ehci_writel(ehci, port_status, status_reg);
+#ifdef CONFIG_MACH_MAPPHONE
+		/* when detect a full speed device, it's compliant with EHCI
+		 * specification to give up ownership of that port. But for our
+		 * case, there is really no other device connected to port 3,
+		 * and for some reason when a panic in the device happens,
+		 * the peripheral shows up as full speed device, hence
+		 * enumeration with EHCI fails. To workaround this issue, BP
+		 * reset USB controller and restart enumeration process if
+		 * enumeration doesn't seem to happen, and in EHCI driver, we
+		 * don't give up ownership of the port, simply waiting for the
+		 * of the port, simply waiting for the peripheral to connect
+		 * again. */
+		if ((index != 2) || is_cdma_phone()) {
+			/* what happens if HCS_N_CC(params) == 0 ?*/
+			port_status |= PORT_OWNER;
+			port_status &= ~PORT_RWC_BITS;
+			ehci_writel(ehci, port_status, status_reg);
+		}
+#endif
 
 		/* ensure 440EPX ohci controller state is operational */
 		if (ehci->has_amcc_usb23)
@@ -696,6 +604,7 @@ ehci_hub_status_data (struct usb_hcd *hcd, char *buf)
 	spin_unlock_irqrestore (&ehci->lock, flags);
 	return status ? retval : 0;
 }
+
 /*-------------------------------------------------------------------------*/
 
 static void
@@ -732,102 +641,6 @@ ehci_hub_descriptor (
 }
 
 /*-------------------------------------------------------------------------*/
-
-int omap_ehci_ulpi_write(const struct usb_hcd *hcd, u8 val, u8 reg, u8 retry_times);
-void omap_ehci_hw_phy_reset(const struct usb_hcd *hcd);
-#define CM_L3INIT_HSUSBHOST_CLKCTRL	(0x4A009358)
-#define L3INIT_HSUSBHOST_CLKCTRL	(0x4A009358)
-#define OMAP_UHH_SYSCONFIG		(0x4a064010)
-#define OMAP_UHH_SYSSTATUS		(0x4a064014)
-#define OMAP_UHH_HOSTCONFIG		(0x4a064040)
-
-void uhh_omap_reset_link(struct ehci_hcd *ehci)
-{
-	u32 usbcmd_backup;
-	u32 usbintr_backup;
-	u32 asynclistaddr_backup, periodiclistbase_backup;
-	u32 portsc0_backup;
-	u32 uhh_sysconfig_backup, uhh_hostconfig_backup;
-	u32 temp_reg;
-	u8 count;
-	u16 orig_val, val;
-
-	/* switch to internal 60Mhz clock */
-	temp_reg = omap_readl(L3INIT_HSUSBHOST_CLKCTRL);
-	temp_reg |= 1 << 8;
-	temp_reg &= ~(1 << 24);
-	omap_writel(temp_reg, L3INIT_HSUSBHOST_CLKCTRL);
-
-	/* Backup current registers of EHCI */
-	usbcmd_backup = ehci_readl(ehci, &ehci->regs->command);
-	ehci_writel(ehci,
-		usbcmd_backup & ~(CMD_IAAD | CMD_ASE | CMD_PSE | CMD_RUN),
-		&ehci->regs->command);
-	mdelay(3);
-	/* check controller stopped */
-	handshake(ehci, &ehci->regs->status, STS_HALT, 1, 150);
-	asynclistaddr_backup = ehci_readl(ehci, &ehci->regs->async_next);
-	periodiclistbase_backup = ehci_readl(ehci, &ehci->regs->frame_list);
-	portsc0_backup = ehci_readl(ehci, &ehci->regs->port_status[0]);
-	usbintr_backup = ehci_readl(ehci, &ehci->regs->intr_enable);
-	uhh_sysconfig_backup = omap_readl(OMAP_UHH_SYSCONFIG);
-	uhh_hostconfig_backup = omap_readl(OMAP_UHH_HOSTCONFIG);
-
-	/* Soft reset EHCI controller */
-	omap_writel(omap_readl(OMAP_UHH_SYSCONFIG) | (1<<0),
-				OMAP_UHH_SYSCONFIG);
-	/* wait for reset done */
-	count = 10;
-	while ((omap_readl(OMAP_UHH_SYSCONFIG) & (1<<0)) && count--)
-		mdelay(1);
-	if (!count)
-		pr_err("ehci:link_reset: soft-reset fail\n");
-
-
-	/* switch back to external 60Mhz clock */
-	temp_reg &= ~(1 << 8);
-	temp_reg |= 1 << 24;
-	omap_writel(temp_reg, L3INIT_HSUSBHOST_CLKCTRL);
-	mdelay(5);
-
-	/*soft reset ehci registers */
-	ehci_writel(ehci, (1<<1), &ehci->regs->command);
-	count = 10;
-	while ((ehci_readl(ehci, &ehci->regs->command) & (1<<1)) && count--)
-		mdelay(1);
-	if (!count)
-		pr_err("ehci:link_reset: soft-reset fail\n");
-
-	/* Restore registers after reset */
-	omap_writel(uhh_sysconfig_backup, OMAP_UHH_SYSCONFIG);
-	omap_writel(uhh_hostconfig_backup, OMAP_UHH_HOSTCONFIG);
-	ehci_writel(ehci, periodiclistbase_backup, &ehci->regs->frame_list);
-	ehci_writel(ehci, asynclistaddr_backup, &ehci->regs->async_next);
-	ehci_writel(ehci, FLAG_CF, &ehci->regs->configured_flag);
-	ehci_writel(ehci, 0, &ehci->regs->intr_enable);
-	ehci_writel(ehci, usbcmd_backup, &ehci->regs->command);
-	mdelay(2);
-	ehci_writel(ehci, PORT_POWER, &ehci->regs->port_status[0]);
-
-	/* Put PHY in good default state */
-	if (omap_ehci_ulpi_write(ehci_to_hcd(ehci), 0x20, 0x5, 20) < 0) {
-		/* Toggle STP line */
-		orig_val = val = omap_readw(0x4A1000C4);
-		val |= 0x1F;
-		omap_writew(val, 0x4A1000C4);
-		mdelay(3);
-		omap_writew(orig_val, 0x4A1000C4);
-		omap_ehci_ulpi_write(ehci_to_hcd(ehci), 0x20, 0x5, 20);
-	}
-
-	omap_ehci_ulpi_write(ehci_to_hcd(ehci), 0x41, 0x4, 20);
-	omap_ehci_ulpi_write(ehci_to_hcd(ehci), 0x18, 0x7, 20);
-	omap_ehci_ulpi_write(ehci_to_hcd(ehci), 0x66, 0xA, 20);
-	omap_ehci_ulpi_write(ehci_to_hcd(ehci), 0x45, 0x4, 20);
-
-	handshake(ehci, &ehci->regs->port_status[0], PORT_CONNECT, 1, 2000);
-	ehci_writel(ehci, usbintr_backup, &ehci->regs->intr_enable);
-}
 
 static int ehci_hub_control (
 	struct usb_hcd	*hcd,
@@ -1234,25 +1047,3 @@ error_exit:
 	spin_unlock_irqrestore (&ehci->lock, flags);
 	return retval;
 }
-
-#ifndef CONFIG_USB_EHCI_HCD_OMAP
-static void ehci_relinquish_port(struct usb_hcd *hcd, int portnum)
-{
-	struct ehci_hcd		*ehci = hcd_to_ehci(hcd);
-
-	if (ehci_is_TDI(ehci))
-		return;
-	set_owner(ehci, --portnum, PORT_OWNER);
-}
-
-static int ehci_port_handed_over(struct usb_hcd *hcd, int portnum)
-{
-	struct ehci_hcd		*ehci = hcd_to_ehci(hcd);
-	u32 __iomem		*reg;
-
-	if (ehci_is_TDI(ehci))
-		return 0;
-	reg = &ehci->regs->port_status[portnum - 1];
-	return ehci_readl(ehci, reg) & PORT_OWNER;
-}
-#endif

@@ -917,6 +917,11 @@ void __init usbhs_init(const struct usbhs_omap_board_data *pdata)
 {
 }
 
+void __init usb_ehci_init(struct ehci_hcd_omap_platform_data *pdata)
+
+{
+}
+
 #endif
 
 
